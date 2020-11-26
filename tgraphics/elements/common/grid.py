@@ -37,4 +37,10 @@ class Grid(ElementABC):
 
     def render(self, location, size=None):
         for c, pos in self._sub:
-            c.render((location[0] + pos[0], location[1] + pos[1]))
+            _sz = c.size
+            x, y = location[0] + pos[0], location[1] + pos[1]
+            if x + _sz[0] >= 0 and y + _sz[1] >= 0:
+                if size:
+                    if x > size[0] and y > size[1]:
+                        continue
+                c.render((x, y))

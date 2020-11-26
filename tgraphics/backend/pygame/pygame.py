@@ -6,6 +6,8 @@ import os
 os.environ['PYGAME_FREETYPE'] = "1"
 import pygame
 
+from . import mouse
+
 # pylint: disable=no-member
 import pygame._sdl2
 
@@ -280,6 +282,14 @@ class Texture:
     def from_surface(renderer: Renderer, surface: Surface):
         return Texture((renderer, _PygameClsSdlTexture.from_surface(renderer._renderer, surface._surface)))
 
+    @staticmethod
+    def from_file(renderer: Renderer, filename):
+        return Texture.from_surface(renderer, Surface.from_file(filename))
+
+    @staticmethod
+    def from_io(renderer: Renderer, io, ext_hint):
+        return Texture.from_surface(renderer, Surface.from_io(io, ext_hint))
+
     @property
     def w(self):
         return self._texture.width
@@ -313,8 +323,44 @@ class Texture:
         """
         self._texture.draw(src_rect, dst_rect_or_coord, angle, origin, flipX, flipY)
 
+    def draw(self, location, size=None):
+        if size:
+            raise NotImplementedError()
+        else:
+            self.blit_to_target(dst_rect_or_coord=location)
+
+def _parse_font_entry_win(name, font, fonts):
+    """
+    Parse out a simpler name and the font style from the initial file name.
+
+    :param name: The font name
+    :param font: The font file path
+    :param fonts: The pygame font dictionary
+
+    :return: Tuple of (bold, italic, name)
+    """
+    true_type_suffix = '(TrueType)'
+    # mods = ('demibold', 'narrow', 'light', 'unicode', 'bt', 'mt')
+    if name.endswith(true_type_suffix):
+        name = name.rstrip(true_type_suffix).rstrip()
+    name = name.lower().split()
+    bold = italic = 0
+    # for mod in mods:
+    #     if mod in name:
+    #         name.remove(mod)
+    if 'bold' in name:
+        name.remove('bold')
+        bold = 1
+    if 'italic' in name:
+        name.remove('italic')
+        italic = 1
+    name = ''.join(name)
+    name = pygame.sysfont._simplename(name)
+
+    pygame.sysfont._addfont(name, bold, italic, font, fonts)
 
 def init():
+    pygame.sysfont._parse_font_entry_win = _parse_font_entry_win
     pygame.init()
 
 # TODO: lock
@@ -370,9 +416,14 @@ _DEFAULT_EVENTHANDLERS = dict(
 
 def dispatch_event(window, event, *args, **kwargs):
     if func := window._funcs[event]:
-        func()
+        func(*args, **kwargs)
     else:
-        _DEFAULT_EVENTHANDLERS[event](window, *args, **kwargs)
+        try:
+            func = _DEFAULT_EVENTHANDLERS[event]
+        except KeyError:
+            return
+
+        func(window, *args, **kwargs)
 
 def run():
     global _running
@@ -385,5 +436,28 @@ def run():
                 window = Window(_window)
             if event.type == pygame.QUIT:
                 dispatch_event(window, 'on_close')
+            elif event.type == pygame.KEYDOWN:
+                dispatch_event(window, 'on_key_press', event.key, event.mod)
+            elif event.type == pygame.KEYUP:
+                dispatch_event(window, 'on_key_release', event.key, event.mod)
+            elif event.type == pygame.MOUSEMOTION:
+                if any(event.buttons):
+                    dispatch_event(window, 'on_mouse_drag', *event.pos, *event.rel, mouse._mouse_from_pygtpl(event.buttons))
+                else:
+                    dispatch_event(window, 'on_mouse_motion', *event.pos, *event.rel)
+            elif event.type == pygame.MOUSEBUTTONUP:
+                dispatch_event(window, 'on_mouse_release', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.set_mods())
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                dispatch_event(window, 'on_mouse_press', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.set_mods())
+            elif event.type == pygame.MOUSEWHEEL:
+                if event.flipped:
+                    dx = -event.x
+                    dy = -event.y
+                else:
+                    dx = event.x
+                    dy = event.y
+
+                dispatch_event(window, 'on_mouse_scroll', *pygame.mouse.get_pos(), dx, dy)
+                
         for window in _Windows:
             dispatch_event(window, '_on_draw')

@@ -46,4 +46,5 @@ class Label:
         else:
             _sz = self.size
             bottom = _sz[0] + position[0], _sz[1] + position[1]
+
         self._texttext[rdr].blit_to_target(dst_rect_or_coord=(*position, *bottom))

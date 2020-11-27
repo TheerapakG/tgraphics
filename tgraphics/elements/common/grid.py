@@ -8,6 +8,7 @@ class Grid(ElementABC):
     _sub: List[Tuple[ElementABC, Tuple[int, int]]]
 
     def __init__(self):
+        super().__init__()
         self._sub = list()
 
     def add_child(self, index, child: ElementABC, position):

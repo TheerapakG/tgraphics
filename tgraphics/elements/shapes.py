@@ -3,6 +3,7 @@ from ..core.elementABC import ElementABC
 
 class _ShapeReflectorMixin:
     def __init__(self, cls, *args, **kwargs):
+        super().__init__()
         self._instance = cls(*args, **kwargs)
 
     @property

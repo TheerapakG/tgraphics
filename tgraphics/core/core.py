@@ -55,7 +55,12 @@ class Window:
     @target_element.setter
     def target_element(self, element):
         _WindowsBoundedElement[self] = element
-        self._window.event('on_draw')(partial(element.render, (0, 0)))
+        if element:
+            self._window.event('on_draw')(partial(element.render, (0, 0)))
+            self._window.target = element
+        else:
+            self._window.event('on_draw')(None)
+            self._window.target = None
 
     def event(self, func):
         return self._window.event(func)

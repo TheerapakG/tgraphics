@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
+from ._eventdispatch import EventDispatcher
 
-class ElementABC(ABC):
+class ElementABC(EventDispatcher, ABC):
+    def __init__(self):
+        super().__init__()
+        
     @property
     @abstractmethod
     def size(self):

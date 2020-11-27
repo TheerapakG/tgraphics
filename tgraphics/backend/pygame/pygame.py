@@ -1,12 +1,12 @@
 from collections import defaultdict
 from enum import Enum
-from functools import partial
 import os
 
 os.environ['PYGAME_FREETYPE'] = "1"
 import pygame
 
 from . import mouse
+from ...core._eventdispatch import EventDispatcher
 
 # pylint: disable=no-member
 import pygame._sdl2
@@ -14,7 +14,7 @@ import pygame._sdl2
 _PygameFlagSdl_WINDOWPOS_UNDEFINED = getattr(pygame, "WINDOWPOS_UNDEFINED", pygame._sdl2.WINDOWPOS_UNDEFINED)
 _PygameClsSdlWindow = getattr(pygame, "Window", pygame._sdl2.Window)
 _PygameClsSdlRenderer = getattr(pygame, "Renderer", pygame._sdl2.Renderer)
-_PygameClsSdlTexture= getattr(pygame, "Renderer", pygame._sdl2.Texture)
+_PygameClsSdlTexture= getattr(pygame, "Texture", pygame._sdl2.Texture)
 
 class Renderer:
     def __init__(self, _pyg):
@@ -111,8 +111,9 @@ class Renderer:
 _WindowsMap = dict()
 _Windows = set()
 
-class Window:
+class Window(EventDispatcher):
     def __init__(self, _pyg):
+        super().__init__()
         self._window = _pyg
         if _pyg in _WindowsMap:
             other = _WindowsMap[_pyg]
@@ -180,11 +181,6 @@ class Window:
     @property
     def renderer(self):
         return self._renderer
-
-    def event(self, func, *, name=None):
-        if isinstance(func, str):
-            return partial(self.event, name=func)
-        self._funcs[name if name else func.__name__] = func
 
 class Surface:
     def __init__(self, _pyg):
@@ -395,9 +391,8 @@ def _default_draw(window: Window):
     renderer = window.renderer
     renderer.target = None
     renderer.clear()
-    if func := window._funcs['on_draw']:
-        _CurrentRenderer = renderer
-        func()
+    _CurrentRenderer = renderer
+    window.dispatch('on_draw')
     renderer.update()
 
 class InvalidRendererStateException(Exception):
@@ -415,8 +410,8 @@ _DEFAULT_EVENTHANDLERS = dict(
 )
 
 def dispatch_event(window, event, *args, **kwargs):
-    if func := window._funcs[event]:
-        func(*args, **kwargs)
+    if event in window.handlers:
+        window.dispatch(event, *args, **kwargs)
     else:
         try:
             func = _DEFAULT_EVENTHANDLERS[event]
@@ -446,9 +441,9 @@ def run():
                 else:
                     dispatch_event(window, 'on_mouse_motion', *event.pos, *event.rel)
             elif event.type == pygame.MOUSEBUTTONUP:
-                dispatch_event(window, 'on_mouse_release', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.set_mods())
+                dispatch_event(window, 'on_mouse_release', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.get_mods())
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                dispatch_event(window, 'on_mouse_press', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.set_mods())
+                dispatch_event(window, 'on_mouse_press', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.get_mods())
             elif event.type == pygame.MOUSEWHEEL:
                 if event.flipped:
                     dx = -event.x

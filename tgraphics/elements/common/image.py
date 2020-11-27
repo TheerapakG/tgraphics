@@ -3,6 +3,7 @@ from ...core.elementABC import ElementABC
 
 class Image(ElementABC):
     def __init__(self, _texture):
+        super().__init__()
         self._texture = _texture
 
     @staticmethod

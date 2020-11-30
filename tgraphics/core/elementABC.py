@@ -13,6 +13,3 @@ class ElementABC(EventDispatcher, ABC):
     @abstractmethod
     def render(self, location, size=None):
         raise NotImplementedError()
-
-    def dispatch_event(self, event):
-        return False

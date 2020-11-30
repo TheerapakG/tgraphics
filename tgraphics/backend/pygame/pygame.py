@@ -426,11 +426,13 @@ def run():
         raise InvalidLoopStateException()
     _running = True
     while _running:
+        _num_mouse = 0
         for event in pygame.event.get():
             if _window := getattr(event, 'window', None):
                 window = Window(_window)
             if event.type == pygame.QUIT:
-                dispatch_event(window, 'on_close')
+                _running = False
+                break
             elif event.type == pygame.KEYDOWN:
                 dispatch_event(window, 'on_key_press', event.key, event.mod)
             elif event.type == pygame.KEYUP:
@@ -441,8 +443,14 @@ def run():
                 else:
                     dispatch_event(window, 'on_mouse_motion', *event.pos, *event.rel)
             elif event.type == pygame.MOUSEBUTTONUP:
+                if _num_mouse == 1:
+                    pygame.event.set_grab(False) # SDL_CaptureMouse
+                _num_mouse -= 1
                 dispatch_event(window, 'on_mouse_release', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.get_mods())
             elif event.type == pygame.MOUSEBUTTONDOWN:
+                if _num_mouse == 0:
+                    pygame.event.set_grab(True)
+                _num_mouse += 1
                 dispatch_event(window, 'on_mouse_press', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.get_mods())
             elif event.type == pygame.MOUSEWHEEL:
                 if event.flipped:
@@ -453,6 +461,21 @@ def run():
                     dy = event.y
 
                 dispatch_event(window, 'on_mouse_scroll', *pygame.mouse.get_pos(), dx, dy)
+            elif event.type == pygame.WINDOWEVENT:
+                if event.event == pygame.WINDOWEVENT_CLOSE:
+                    dispatch_event(window, 'on_close')
+                elif event.event == pygame.WINDOWEVENT_ENTER:
+                    dispatch_event(window, 'on_mouse_enter')
+                elif event.event == pygame.WINDOWEVENT_LEAVE:
+                    dispatch_event(window, 'on_mouse_leave')
+                elif event.event == pygame.WINDOWEVENT_HIDDEN:
+                    dispatch_event(window, 'on_hide')
+                elif event.event == pygame.WINDOWEVENT_MOVED:
+                    dispatch_event(window, 'on_move', -1, -1)
+                elif event.event == pygame.WINDOWEVENT_RESIZED:
+                    dispatch_event(window, 'on_resize', -1, -1)
+                elif event.event == pygame.WINDOWEVENT_SHOWN:
+                    dispatch_event(window, 'on_show', -1, -1)
                 
         for window in _Windows:
             dispatch_event(window, '_on_draw')

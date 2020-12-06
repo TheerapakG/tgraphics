@@ -34,6 +34,14 @@ class Grid(ElementABC):
             return False
 
         @self.event
+        def on_mouse_leave(): # pylint: disable=unused-variable
+            if self.target:
+                return self._try_dispatch('on_mouse_leave')
+                self.target = None
+            else:
+                return False
+
+        @self.event
         def on_mouse_drag(x, y, dx, dy, buttons): # pylint: disable=unused-variable
             if self.target:
                 return self._try_dispatch('on_mouse_drag', x, y, dx, dy, buttons)

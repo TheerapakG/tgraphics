@@ -14,6 +14,9 @@ class EventDispatcher:
         self._t = target
 
     def event(self, func, *, name=None):
+        """
+        add event handler
+        """
         if isinstance(func, str):
             return partial(self.event, name=func)
         if func is not None:

@@ -7,8 +7,6 @@ class MouseButton(Flag):
     LEFT = auto()
     MIDDLE = auto()
     RIGHT = auto()
-    BUTTON4 = auto()
-    BUTTON5 = auto()
 
 _buttons = list(MouseButton)
 
@@ -22,8 +20,6 @@ if TYPE_CHECKING:
     LEFT = _inc_bit()
     MIDDLE = _inc_bit()
     RIGHT = _inc_bit()
-    BUTTON4 = _inc_bit()
-    BUTTON5 = _inc_bit()
 
     del _inc_bit
 else:
@@ -31,10 +27,10 @@ else:
         if not s.startswith('_'):
             globals()[s] = v = getattr(MouseButton, s)
 
-_NButton = LEFT & MIDDLE
+NButton = LEFT & MIDDLE
 
 def _mouse_from_pyg(_pyg):
     return _buttons[_pyg-1]
 
 def _mouse_from_pygtpl(tpl):
-    return reduce(or_, (b for b, v in zip(_buttons, tpl) if v), _NButton)
+    return reduce(or_, (b for b, v in zip(_buttons, tpl) if v), NButton)

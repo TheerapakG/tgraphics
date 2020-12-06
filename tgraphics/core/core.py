@@ -1,13 +1,53 @@
 from functools import partial
 
 from .backend_loader import _current_backend
-from .elementABC import ElementABC
 
 _WindowsBoundedElement = dict()
 
 class Window:
+    _current_mouse_interact = None
+
+    @classmethod
+    def with_mouse_interaction(cls):
+        return cls._current_mouse_interact
+
     def __init__(self, _back):
         self._window = _back
+        self._mouse_target = None
+
+        @self.event
+        def on_mouse_press(x, y, buttons, mods): # pylint: disable=unused-variable
+            if not self._current_mouse_interact:
+                self._current_mouse_interact = self
+                return self._window.target.dispatch('on_mouse_press', x, y, buttons, mods)
+            
+            else:
+                assert self._current_mouse_interact is self, "mouse event not locked to a window after clicked"
+                if self._mouse_target:
+                    return self._mouse_target.dispatch('on_mouse_press', x, y, buttons, mods)
+                else:
+                    return False
+
+        @self.event
+        def on_mouse_drag(x, y, dx, dy, buttons): # pylint: disable=unused-variable
+            assert self._current_mouse_interact is self, "mouse event not locked to a window after clicked"
+
+            if self._mouse_target:
+                return self._mouse_target.dispatch('on_mouse_drag', x, y, dx, dy, buttons)
+            else:
+                return False
+
+        @self.event
+        def on_mouse_release(x, y, buttons, mods): # pylint: disable=unused-variable
+            assert self._current_mouse_interact is self, "mouse event not locked to a window after clicked"
+
+            if self._mouse_target:
+                return self._mouse_target.dispatch('on_mouse_release', x, y, buttons, mods)
+                if buttons == _current_backend().mouse.NButton:
+                    self._mouse_target = None
+                    self._current_mouse_interact = None
+            else:
+                return False
 
     @staticmethod
     def create(title="TGraphics", size=(1280, 720), full_screen=False, resizable=False):

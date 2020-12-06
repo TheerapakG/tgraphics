@@ -6,6 +6,7 @@ os.environ['PYGAME_FREETYPE'] = "1"
 import pygame
 
 from . import mouse
+from ._sdl2 import *
 from ...core._eventdispatch import EventDispatcher
 
 # pylint: disable=no-member
@@ -356,6 +357,7 @@ def _parse_font_entry_win(name, font, fonts):
     pygame.sysfont._addfont(name, bold, italic, font, fonts)
 
 def init():
+    # "fix" pygame overwriting some fonts from the same family
     pygame.sysfont._parse_font_entry_win = _parse_font_entry_win
     pygame.init()
 
@@ -425,11 +427,13 @@ def run():
     if _running:
         raise InvalidLoopStateException()
     _running = True
+    _num_mouse = 0
     while _running:
-        _num_mouse = 0
         for event in pygame.event.get():
             if _window := getattr(event, 'window', None):
                 window = Window(_window)
+            else:
+                window = None
             if event.type == pygame.QUIT:
                 _running = False
                 break
@@ -443,13 +447,17 @@ def run():
                 else:
                     dispatch_event(window, 'on_mouse_motion', *event.pos, *event.rel)
             elif event.type == pygame.MOUSEBUTTONUP:
+                if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
+                    continue
                 if _num_mouse == 1:
-                    pygame.event.set_grab(False) # SDL_CaptureMouse
+                    sdl_capturemouse(False)
                 _num_mouse -= 1
                 dispatch_event(window, 'on_mouse_release', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.get_mods())
             elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
+                    continue
                 if _num_mouse == 0:
-                    pygame.event.set_grab(True)
+                    sdl_capturemouse(True)
                 _num_mouse += 1
                 dispatch_event(window, 'on_mouse_press', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.get_mods())
             elif event.type == pygame.MOUSEWHEEL:

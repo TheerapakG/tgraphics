@@ -16,17 +16,13 @@ class Window:
         self._mouse_target = None
 
         @self.event
-        def on_mouse_press(x, y, buttons, mods): # pylint: disable=unused-variable
+        def on_mouse_press(x, y, button, mods): # pylint: disable=unused-variable
             if not self._current_mouse_interact:
-                self._current_mouse_interact = self
-                return self._window.target.dispatch('on_mouse_press', x, y, buttons, mods)
-            
+                self._current_mouse_interact = self     
             else:
                 assert self._current_mouse_interact is self, "mouse event not locked to a window after clicked"
-                if self._mouse_target:
-                    return self._mouse_target.dispatch('on_mouse_press', x, y, buttons, mods)
-                else:
-                    return False
+
+            return self._mouse_target.dispatch('on_mouse_press', x, y, button, mods)
 
         @self.event
         def on_mouse_drag(x, y, dx, dy, buttons): # pylint: disable=unused-variable
@@ -38,11 +34,11 @@ class Window:
                 return False
 
         @self.event
-        def on_mouse_release(x, y, buttons, mods): # pylint: disable=unused-variable
+        def on_mouse_release(x, y, button, mods): # pylint: disable=unused-variable
             assert self._current_mouse_interact is self, "mouse event not locked to a window after clicked"
 
             if self._mouse_target:
-                return self._mouse_target.dispatch('on_mouse_release', x, y, buttons, mods)
+                return self._mouse_target.dispatch('on_mouse_release', x, y, button, mods)
                 if buttons == _current_backend().mouse.NButton:
                     self._mouse_target = None
                     self._current_mouse_interact = None

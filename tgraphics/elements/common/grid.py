@@ -1,14 +1,13 @@
 from collections.abc import Iterator
-from typing import Optional, Union
+from typing import NamedTuple, Optional, Union
 from pygame import Rect
 
 from ...core.backend_loader import _current_backend
 from ...core.elementABC import ElementABC
 
-class Subelement:
-    def __init__(self, element: ElementABC, offset: tuple[int, int]):
-        self.element = element
-        self.offset = offset
+class Subelement(NamedTuple):
+    element: ElementABC
+    offset: tuple[int, int]
 
 class Grid(ElementABC):
     _sub: list[Subelement]
@@ -141,19 +140,21 @@ class Grid(ElementABC):
         return None
 
     def add_child(self, index, child: ElementABC, position):
-        self._sub.insert(index, (child, position))
+        self._sub.insert(index, Subelement(child, position))
 
     def add_child_top(self, child: ElementABC, position):
-        self._sub.append((child, position))
+        self._sub.append(Subelement(child, position))
 
-    def remove_child(self, child: Union[int, ElementABC]):
-        if isinstance(child, ElementABC):
-            # construction via comprehensions should be the fastest way to do this in just Python
-            _idx = {i for i, sub in enumerate(self._sub) if sub[0] is child}
-            self._sub = [sub for i, sub in enumerate(self._sub) if i not in _idx]
-        else: # isinstance(child, int)
-            assert isinstance(child, int), 'unrecognized grid.remove_child child argument type'
+    def remove_child(self, child: Union[int, ElementABC, Subelement]):
+        if isinstance(child, Subelement):
+            self._sub.remove(child)
+        elif isinstance(child, int):
             self._sub.pop(child)
+        else:
+            assert isinstance(child, ElementABC), 'unrecognized grid.remove_child child argument type'
+            # construction via comprehensions should be the fastest way to do this in just Python
+            _idx = {i for i, sub in enumerate(self._sub) if sub.element is child}
+            self._sub = [sub for i, sub in enumerate(self._sub) if i not in _idx]
 
     def remove_child_top(self):
         self._sub.pop()

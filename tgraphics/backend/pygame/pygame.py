@@ -5,7 +5,7 @@ import os
 os.environ['PYGAME_FREETYPE'] = "1"
 import pygame
 
-from . import mouse
+from . import _mouse
 from ._sdl2 import *
 from ...core._eventdispatch import EventDispatcher
 
@@ -422,12 +422,16 @@ def dispatch_event(window, event, *args, **kwargs):
 
         func(window, *args, **kwargs)
 
+_mouses = mouse.NButton
+
 def run():
     global _running
+    global _mouses
     if _running:
         raise InvalidLoopStateException()
     _running = True
-    _num_mouse = 0
+    pygame.event.clear()
+    _mouses = mouse._mouse_from_pyg(pygame.mouse.get_pressed(5))
     while _running:
         for event in pygame.event.get():
             if _window := getattr(event, 'window', None):
@@ -442,24 +446,27 @@ def run():
             elif event.type == pygame.KEYUP:
                 dispatch_event(window, 'on_key_release', event.key, event.mod)
             elif event.type == pygame.MOUSEMOTION:
-                if any(event.buttons):
-                    dispatch_event(window, 'on_mouse_drag', *event.pos, *event.rel, mouse._mouse_from_pygtpl(event.buttons))
+                _mouses = mouse._mouse_from_pygtpl(event.buttons)
+                if _mouses != mouse.NButton:
+                    dispatch_event(window, 'on_mouse_drag', *event.pos, *event.rel, _mouses)
                 else:
                     dispatch_event(window, 'on_mouse_motion', *event.pos, *event.rel)
             elif event.type == pygame.MOUSEBUTTONUP:
                 if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
                     continue
-                if _num_mouse == 1:
+                button = mouse._mouse_from_pyg(event.button)
+                _mouses &= ~button
+                if _mouses == mouse.NButton:
                     sdl_capturemouse(False)
-                _num_mouse -= 1
-                dispatch_event(window, 'on_mouse_release', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.get_mods())
+                dispatch_event(window, 'on_mouse_release', *event.pos, button, pygame.key.get_mods())
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
                     continue
-                if _num_mouse == 0:
+                button = mouse._mouse_from_pyg(event.button)
+                if _mouses == mouse.NButton:
                     sdl_capturemouse(True)
-                _num_mouse += 1
-                dispatch_event(window, 'on_mouse_press', *event.pos, mouse._mouse_from_pyg(event.button), pygame.key.get_mods())
+                _mouses |= button
+                dispatch_event(window, 'on_mouse_press', *event.pos, button, pygame.key.get_mods())
             elif event.type == pygame.MOUSEWHEEL:
                 if event.flipped:
                     dx = -event.x

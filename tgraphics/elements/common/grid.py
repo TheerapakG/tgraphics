@@ -81,7 +81,7 @@ class Grid(ElementABC):
                 self._mouse_press[0].dispatch('on_mouse_release', x, y, button, mods)
 
                 found = False
-                if True: # TODO: if no button pressed
+                if _current_backend().mouse.pressed() == _current_backend().mouse.NButton:
                     for c, pos in reversed(self._sub):
                         if pos[0] <= x + self._loc[0] and pos[1] <= y + self._loc[1]:
                             _sz = c.size

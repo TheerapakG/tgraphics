@@ -1,16 +1,17 @@
-from typing import List, Optional, Tuple, Union
+from collections.abc import Iterator
+from typing import Optional, Union
 from pygame import Rect
 
 from ...core.backend_loader import _current_backend
 from ...core.elementABC import ElementABC
 
 class Subelement:
-    def __init__(self, element: ElementABC, offset: Tuple[int, int]):
+    def __init__(self, element: ElementABC, offset: tuple[int, int]):
         self.element = element
         self.offset = offset
 
 class Grid(ElementABC):
-    _sub: List[Subelement]
+    _sub: list[Subelement]
     _mouse_target: Optional[Subelement]
     _mouse_enter: Optional[Subelement]
     _mouse_press: Optional[Subelement]
@@ -32,7 +33,6 @@ class Grid(ElementABC):
                     self._mouse_target = sub
                     found = True
                 if self._mouse_enter is not sub:
-                    entered = False
                     if any([sub.element.dispatch('on_mouse_enter'), sub.element.dispatch('on_mouse_motion', *pos, dx, dy)]):
                         if self._mouse_enter:
                             self._mouse_enter.element.dispatch('on_mouse_leave')
@@ -112,7 +112,7 @@ class Grid(ElementABC):
             
             return False
 
-    def elements_at(self, x, y, actual_loc = False) -> Tuple[Subelement, Tuple[int, int]]:
+    def elements_at(self, x, y, actual_loc = False) -> Iterator[tuple[Subelement, tuple[int, int]]]:
         """
         get all elements from top to bottom at x, y
         """

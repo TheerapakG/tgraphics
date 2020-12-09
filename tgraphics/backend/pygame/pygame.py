@@ -1,5 +1,5 @@
 from collections import defaultdict
-from enum import Enum
+from enum import Enum, IntEnum
 import os
 
 os.environ['PYGAME_FREETYPE'] = "1"
@@ -17,10 +17,25 @@ _PygameClsSdlWindow = getattr(pygame, "Window", pygame._sdl2.Window)
 _PygameClsSdlRenderer = getattr(pygame, "Renderer", pygame._sdl2.Renderer)
 _PygameClsSdlTexture= getattr(pygame, "Texture", pygame._sdl2.Texture)
 
+# from https://github.com/pygame/pygame/blob/main/src_c/cython/pygame/_sdl2/video.pxd
+# there's probably no any more elegant way to get these
+class BlendMode(IntEnum):
+    BLENDMODE_NONE = 0x00000000
+    BLENDMODE_BLEND = 0x00000001
+    BLENDMODE_ADD = 0x00000002
+    BLENDMODE_MOD = 0x00000004
+    BLENDMODE_INVALID = 0x7FFFFFFF
+
+_WindowsMap = dict()
+_Windows = set()
+
 class Renderer:
     def __init__(self, _pyg):
         self._window, self._renderer = _pyg
-        self.draw_color = (0, 0, 0, 255)
+        try:
+            self._ctype = _WindowsMap[self._window]._renderer._ctype
+        except KeyError:
+            self._ctype = sdl_getrenderer(self._window._ctype)
 
     def __hash__(self):
         return hash(self._window.id)
@@ -89,6 +104,10 @@ class Renderer:
     @draw_color.setter
     def draw_color(self, new_color):
         self._renderer.draw_color = new_color
+        if new_color[3] < 255:
+            sdl_setrenderdrawblendmode(self._ctype, BlendMode.BLENDMODE_BLEND)
+        else:
+            sdl_setrenderdrawblendmode(self._ctype, BlendMode.BLENDMODE_NONE)
 
     def clear(self):
         with self.draw_color((0, 0, 0, 255)):
@@ -109,18 +128,18 @@ class Renderer:
     def fill_rect(self, rect):
         self._renderer.fill_rect(rect)
 
-_WindowsMap = dict()
-_Windows = set()
 
 class Window(EventDispatcher):
     def __init__(self, _pyg):
         super().__init__()
         self._window = _pyg
-        if _pyg in _WindowsMap:
+        try:
             other = _WindowsMap[_pyg]
+            self._ctype = other._ctype
             self._renderer = other._renderer
             self._funcs = other._funcs
-        else:
+        except KeyError:
+            self._ctype = sdl_getwindowfromid(self._window.id)
             try:
                 self._renderer = Renderer((self, _PygameClsSdlRenderer.from_window(self._window)))
             except pygame._sdl2.sdl2.error:
@@ -266,14 +285,26 @@ class Texture:
         self._renderer, self._texture = _pyg
 
     @staticmethod
-    def create(renderer: Renderer, size, access: TextureAccessEnum=TextureAccessEnum.Static):
+    def create(renderer: Renderer, size, access: TextureAccessEnum=TextureAccessEnum.Static, transparent=False):
         if access == TextureAccessEnum.Static:
             _n_dict = {'static': True}
         elif access == TextureAccessEnum.Streaming:
             _n_dict = {'streaming': True}
-        elif access == TextureAccessEnum.Static:
+        elif access == TextureAccessEnum.Target:
             _n_dict = {'target': True}
-        return Texture((renderer, _PygameClsSdlTexture(renderer._renderer, size, **_n_dict)))
+        else:
+            raise ValueError('unknown access enum value')
+
+        tex = Texture((renderer, _PygameClsSdlTexture(renderer._renderer, size, **_n_dict)))
+
+        if transparent:
+            tex._texture.blend_mode(BlendMode.BLENDMODE_BLEND)
+
+        return tex
+
+    @staticmethod
+    def create_as_target(renderer: Renderer, size, transparent=False):
+        return Texture.create(renderer, size, TextureAccessEnum.Target, transparent)
 
     @staticmethod
     def from_surface(renderer: Renderer, surface: Surface):
@@ -325,6 +356,23 @@ class Texture:
             raise NotImplementedError()
         else:
             self.blit_to_target(dst_rect_or_coord=location)
+
+    def as_color_mod(self, color):
+        self._orig_col = (self._texture.color, self._texture.alpha)
+        self._texture.color = color[0:3]
+        if len(color) > 3:
+            self._texture.alpha = color[3]
+
+        new_tex = Texture.create(self._renderer, self.size, TextureAccessEnum.Target)
+
+        with self._renderer.target(new_tex):
+            self.blit_to_target()
+        
+        self._texture.color = self._orig_col[0]
+        self._texture.alpha = self._orig_col[1]
+
+        return new_tex
+
 
 def _parse_font_entry_win(name, font, fonts):
     """
@@ -422,7 +470,7 @@ def dispatch_event(window, event, *args, **kwargs):
 
         func(window, *args, **kwargs)
 
-_mouses = mouse.NButton
+_mouses = _mouse.NButton
 
 def run():
     global _running
@@ -431,7 +479,7 @@ def run():
         raise InvalidLoopStateException()
     _running = True
     pygame.event.clear()
-    _mouses = mouse._mouse_from_pyg(pygame.mouse.get_pressed(5))
+    _mouses = _mouse._mouse_from_pygtpl(pygame.mouse.get_pressed(5))
     while _running:
         for event in pygame.event.get():
             if _window := getattr(event, 'window', None):
@@ -446,24 +494,24 @@ def run():
             elif event.type == pygame.KEYUP:
                 dispatch_event(window, 'on_key_release', event.key, event.mod)
             elif event.type == pygame.MOUSEMOTION:
-                _mouses = mouse._mouse_from_pygtpl(event.buttons)
-                if _mouses != mouse.NButton:
+                _mouses = _mouse._mouse_from_pygtpl(event.buttons)
+                if _mouses != _mouse.NButton:
                     dispatch_event(window, 'on_mouse_drag', *event.pos, *event.rel, _mouses)
                 else:
                     dispatch_event(window, 'on_mouse_motion', *event.pos, *event.rel)
             elif event.type == pygame.MOUSEBUTTONUP:
                 if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
                     continue
-                button = mouse._mouse_from_pyg(event.button)
+                button = _mouse._mouse_from_pyg(event.button)
                 _mouses &= ~button
-                if _mouses == mouse.NButton:
+                if _mouses == _mouse.NButton:
                     sdl_capturemouse(False)
                 dispatch_event(window, 'on_mouse_release', *event.pos, button, pygame.key.get_mods())
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
                     continue
-                button = mouse._mouse_from_pyg(event.button)
-                if _mouses == mouse.NButton:
+                button = _mouse._mouse_from_pyg(event.button)
+                if _mouses == _mouse.NButton:
                     sdl_capturemouse(True)
                 _mouses |= button
                 dispatch_event(window, 'on_mouse_press', *event.pos, button, pygame.key.get_mods())

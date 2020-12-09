@@ -24,6 +24,17 @@ os.chdir(_sdl2_dir)
 
 _sdl2 = ctypes.CDLL(_sdl2_name)
 
+_sdl2.SDL_GetRenderer.restype = ctypes.c_void_p
+def sdl_getrenderer(window) -> ctypes.c_void_p:
+    return ctypes.cast(_sdl2.SDL_GetRenderer(window), ctypes.c_void_p)
+
+def sdl_setrenderdrawblendmode(renderer, blendmode):
+    _sdl2.SDL_SetRenderDrawBlendMode(renderer, blendmode)
+
+_sdl2.SDL_GetWindowFromID.restype = ctypes.c_void_p
+def sdl_getwindowfromid(id) -> ctypes.c_void_p:
+    return ctypes.cast(_sdl2.SDL_GetWindowFromID(ctypes.c_uint32(id)), ctypes.c_void_p)
+
 def sdl_capturemouse(enabled):
     _sdl2.SDL_CaptureMouse(ctypes.c_bool(enabled))
 

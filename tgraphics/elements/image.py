@@ -1,10 +1,11 @@
-from ...core.backend_loader import _current_backend
-from ...core.elementABC import ElementABC
+from ..core.backend_loader import _current_backend
+from ..core.elementABC import ElementABC
 
 class Image(ElementABC):
     def __init__(self, _texture):
         super().__init__()
-        self._texture = _texture
+        self._tex = _texture
+        self._static = True
 
     @staticmethod
     def from_file(filename):
@@ -18,7 +19,11 @@ class Image(ElementABC):
 
     @property
     def size(self):
-        return self._texture.size
+        return self._tex.size
 
     def render(self, location, size=None):
-        self._texture.draw(location, size)
+        self._tex.draw(location, size)
+
+    @property
+    def texture(self):
+        return self._tex

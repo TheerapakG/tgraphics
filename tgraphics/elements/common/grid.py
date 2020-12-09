@@ -1,16 +1,24 @@
-from collections.abc import Iterator
 from typing import NamedTuple, Optional, Union
 from pygame import Rect
 
 from ...core.backend_loader import _current_backend
 from ...core.elementABC import ElementABC
 
+import sys
+assert sys.version_info[0] == 3
+if sys.version_info[1] < 9:
+    from typing import Iterator, List, Tuple
+else:
+    from collections.abc import Iterator
+    List = list
+    Tuple = tuple
+
 class Subelement(NamedTuple):
     element: ElementABC
-    offset: tuple[int, int]
+    offset: Tuple[int, int]
 
 class Grid(ElementABC):
-    _sub: list[Subelement]
+    _sub: List[Subelement]
     _mouse_target: Optional[Subelement]
     _mouse_enter: Optional[Subelement]
     _mouse_press: Optional[Subelement]
@@ -64,7 +72,8 @@ class Grid(ElementABC):
                 self._dispatch(self._mouse_press, 'on_mouse_press', x, y, button, mods)
                 return True
             if self._mouse_target:
-                if self._mouse_press := self._try_dispatch('on_mouse_press', x, y, button, mods):
+                self._mouse_press = self._try_dispatch('on_mouse_press', x, y, button, mods)
+                if self._mouse_press:
                     if self._mouse_press is not self._mouse_enter:
                         self._mouse_enter.element.dispatch('on_mouse_leave')
                         self._mouse_enter = None
@@ -111,7 +120,7 @@ class Grid(ElementABC):
             
             return False
 
-    def elements_at(self, x, y, actual_loc = False) -> Iterator[tuple[Subelement, tuple[int, int]]]:
+    def elements_at(self, x, y, actual_loc = False) -> Iterator[Tuple[Subelement, Tuple[int, int]]]:
         """
         get all elements from top to bottom at x, y
         """

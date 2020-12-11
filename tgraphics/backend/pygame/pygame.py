@@ -52,7 +52,7 @@ class Renderer:
                 self._renderer = renderer
 
             def get(self):
-                return self._renderer.target
+                return self._renderer._renderer.target
 
             def __call__(self, new_target):
                 class _TargetCtxMgrProxy:
@@ -61,7 +61,7 @@ class Renderer:
                         self._replacing = []
 
                     def __enter__(self):
-                        self._replacing.append(self._renderer.target)
+                        self._replacing.append(self._renderer._renderer.target)
                         self._renderer.target = new_target
 
                     def __exit__(self, type, value, traceback):
@@ -69,11 +69,14 @@ class Renderer:
                 
                 return _TargetCtxMgrProxy(self._renderer)
 
-        return _TargetGetProxy(self._renderer)
+        return _TargetGetProxy(self)
 
     @target.setter
     def target(self, new_target):
-        self._renderer.target = new_target
+        if new_target:
+            self._renderer.target = new_target._texture
+        else:
+            self._renderer.target = None
 
     @property
     def draw_color(self):
@@ -82,7 +85,7 @@ class Renderer:
                 self._renderer = renderer
 
             def get(self):
-                return self._renderer.draw_color
+                return self._renderer._renderer.draw_color
 
             def __call__(self, new_color):
                 class _ColorCtxMgrProxy:
@@ -91,7 +94,7 @@ class Renderer:
                         self._replacing = []
 
                     def __enter__(self):
-                        self._replacing.append(self._renderer.draw_color)
+                        self._replacing.append(self._renderer._renderer.draw_color)
                         self._renderer.draw_color = new_color
 
                     def __exit__(self, type, value, traceback):
@@ -99,7 +102,7 @@ class Renderer:
                 
                 return _ColorCtxMgrProxy(self._renderer)
 
-        return _ColorGetProxy(self._renderer)
+        return _ColorGetProxy(self)
 
     @draw_color.setter
     def draw_color(self, new_color):
@@ -148,11 +151,17 @@ class Window(EventDispatcher):
 
     @staticmethod
     def create(title, size, full_screen, resizable):
+        global _CurrentRenderer
         _window = _PygameClsSdlWindow(title, size, fullscreen=full_screen, resizable=resizable)
         window = Window(_window)
         _WindowsMap[_window] = window
         _Windows.add(window)
+        _CurrentRenderer = window._renderer
         return window
+    
+    @staticmethod
+    def get(_pyg):
+        return _WindowsMap[_pyg]
 
     @staticmethod
     def all_windows():
@@ -189,6 +198,14 @@ class Window(EventDispatcher):
     def resizable(self, resizable):
         self._window.resizable = resizable
 
+    @property
+    def size(self):
+        return self._window.size
+
+    @size.setter
+    def size(self, size):
+        self._window.size = size
+
     def icon(self, surface):
         self._window.set_icon(surface)
 
@@ -201,6 +218,7 @@ class Window(EventDispatcher):
     @property
     def renderer(self):
         return self._renderer
+
 
 class Surface:
     def __init__(self, _pyg):
@@ -285,7 +303,7 @@ class Texture:
         self._renderer, self._texture = _pyg
 
     @staticmethod
-    def create(renderer: Renderer, size, access: TextureAccessEnum=TextureAccessEnum.Static, transparent=False):
+    def create(renderer: Renderer, size, access: TextureAccessEnum=TextureAccessEnum.Static, blend=None):
         if access == TextureAccessEnum.Static:
             _n_dict = {'static': True}
         elif access == TextureAccessEnum.Streaming:
@@ -297,14 +315,14 @@ class Texture:
 
         tex = Texture((renderer, _PygameClsSdlTexture(renderer._renderer, size, **_n_dict)))
 
-        if transparent:
-            tex._texture.blend_mode(BlendMode.BLENDMODE_BLEND)
+        if blend:
+            tex._texture.blend_mode = blend
 
         return tex
 
     @staticmethod
-    def create_as_target(renderer: Renderer, size, transparent=False):
-        return Texture.create(renderer, size, TextureAccessEnum.Target, transparent)
+    def create_as_target(renderer: Renderer, size, blend=None):
+        return Texture.create(renderer, size, TextureAccessEnum.Target, blend)
 
     @staticmethod
     def from_surface(renderer: Renderer, surface: Surface):
@@ -329,6 +347,18 @@ class Texture:
     @property
     def size(self):
         return self.w, self.h
+
+    @property
+    def blend_mode(self):
+        return BlendMode(self._texture.blend_mode)
+
+    @blend_mode.setter
+    def blend_mode(self, blend):
+        self._texture.blend_mode = int(blend)
+
+    @property
+    def renderer(self):
+        return self._renderer
 
     def blit_to_target(self, src_rect=None, dst_rect_or_coord=None, angle=0, origin=None, flipX=False, flipY=False):
         """
@@ -358,18 +388,31 @@ class Texture:
             self.blit_to_target(dst_rect_or_coord=location)
 
     def as_color_mod(self, color):
-        self._orig_col = (self._texture.color, self._texture.alpha)
+        _orig_col = (self._texture.color, self._texture.alpha, self._texture.blend_mode)
         self._texture.color = color[0:3]
+        blend = _orig_col[2]
         if len(color) > 3:
             self._texture.alpha = color[3]
+            self._texture.blend_mode = BlendMode.BLENDMODE_NONE
+            if _orig_col[2] == BlendMode.BLENDMODE_NONE:
+                blend = BlendMode.BLENDMODE_BLEND
 
-        new_tex = Texture.create(self._renderer, self.size, TextureAccessEnum.Target)
+        new_tex = Texture.create(self._renderer, self.size, TextureAccessEnum.Target, blend=blend)
 
         with self._renderer.target(new_tex):
             self.blit_to_target()
         
-        self._texture.color = self._orig_col[0]
-        self._texture.alpha = self._orig_col[1]
+        self._texture.color = _orig_col[0]
+        self._texture.alpha = _orig_col[1]
+        self._texture.blend_mode = _orig_col[2]
+
+        return new_tex
+
+    def as_size(self, size):
+        new_tex = Texture.create(self._renderer, size, TextureAccessEnum.Target)
+
+        with self._renderer.target(new_tex):
+            self.blit_to_target()
 
         return new_tex
 
@@ -448,7 +491,7 @@ def _default_draw(window: Window):
 class InvalidRendererStateException(Exception):
     pass
 
-def _current_renderer() -> Renderer:
+def current_renderer() -> Renderer:
     if _CurrentRenderer:
         return _CurrentRenderer
     else:
@@ -483,7 +526,7 @@ def run():
     while _running:
         for event in pygame.event.get():
             if _window := getattr(event, 'window', None):
-                window = Window(_window)
+                window = Window.get(_window)
             else:
                 window = None
             if event.type == pygame.QUIT:

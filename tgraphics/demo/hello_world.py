@@ -1,12 +1,14 @@
 import tgraphics
-import pygame.sysfont
 
 tgraphics.init_with_backend('pygame')
 
 window = tgraphics.Window.create()
-label = tgraphics.text.Label(u"สวัสดี", "Leelawadee UI", False, False, 100)
+label = tgraphics.text.Label("hello world!", '', False, False, 100, (0, 0, 0, 255))
+grid = tgraphics.Grid(window.size)
+grid.add_child_top(tgraphics.shapes.Rectangle(window.size, (255, 255, 255, 255)), (0, 0))
+grid.add_child_top(label, (0, 0))
 
-window.target_element = label
+window.target_element = grid
 
 tgraphics.run()
 

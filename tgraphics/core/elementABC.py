@@ -19,13 +19,15 @@ class ElementABC(EventDispatcher, ABC):
 
     @property
     def static(self):
+        """
+        static implies element will give same render result for same size
+        """
         return self._static
 
-    @property
-    def texture(self):
+    def texture(self, size=None):
         _back = _current_backend()
-        _rdr = _back._current_renderer()
-        _tex = _back.Texture.create_as_target(_rdr, self.size, transparent=True)
+        _rdr = _back.current_renderer()
+        _tex = _back.Texture.create_as_target(_rdr, size if size else self.size, blend=_current_backend().BlendMode.BLENDMODE_BLEND)
         with _rdr.target(_tex):
-            self.render((0, 0))
+            self.render((0, 0), size)
         return _tex

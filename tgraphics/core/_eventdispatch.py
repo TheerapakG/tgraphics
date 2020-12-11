@@ -36,5 +36,5 @@ class EventDispatcher:
             if self._t:
                 return self._t.dispatch(event, *args, **kwargs)
             else:
-                # TODO: log?
-                pass         
+                return True
+                # TODO: log?       

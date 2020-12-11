@@ -1,7 +1,9 @@
 from enum import auto, Enum
 
+from ...core.backend_loader import _current_backend
 from ...core.elementABC import ElementABC
 from ..shapes import Rectangle
+from ..filters import Brightness, Opacity
 
 class ButtonType(Enum):
     DEFAULT = auto()
@@ -10,50 +12,114 @@ class ButtonType(Enum):
 
 class ButtonState(Enum):
     OFF = auto()
-    HOVER = auto()
     ON = auto()
     DISABLED = auto()
 
-class Button(ElementABC):
-    _type: ButtonType
-    _state: ButtonState
-
-    def __init__(self, size, fg, **kwargs):
+class _ButtonRenderHelper(ElementABC):
+    def __init__(self, fg, bg, size):
         super().__init__()
+        self.fg = fg
+        self.bg = bg
         self._sz = size
-        self._type = kwargs.get('type', ButtonType.DEFAULT)
-        self._state = ButtonState.OFF if self._type != ButtonType.DISABLE else ButtonState.DISABLED
-
-        bg = kwargs.get('bg', None)
-        self._normal = (fg, None) if not bg else (fg, bg)
-
-        _h_fg = kwargs.get('hover_fg', fg)
-        _h_bg = kwargs.get('hover_bg', bg if bg else Rectangle(size, (0, 0, 0, 31)))
-        self._hover = (_h_fg, _h_bg)(15/16, 1) if _h_fg is not fg and (bg and _h_bg is not bg) else (_h_fg, _h_bg)
-        
-        _c_fg = kwargs.get('clicked_fg', fg)
-        _c_bg = kwargs.get('clicked_bg', bg if bg else Rectangle(size, (0, 0, 0, 127)))
-        self._clicked = (_c_fg, _c_bg)(3/4, 1) if _c_fg is not fg and (bg and _c_bg is not bg) else (_c_fg, _c_bg)
-
-        _d_fg = kwargs.get('disabled_fg', fg)
-        _d_bg = kwargs.get('disabled_bg', bg)
-        self._disabled = (_d_fg, _d_bg)('grayscale'(1), 1/4) if _d_fg is not fg and _d_bg is not bg else (_d_fg, _d_bg)
+        self._static = self.fg.static and (not self.bg or self.bg.static)
 
     @property
     def size(self):
         return self._sz
 
-    @size.setter
-    def size(self, size):
+    def render(self, location, size=None):
+        size = size if size else self.size 
+        if self.bg:
+            self.bg.render(location, None if self.bg.size==size else size)
+        _fg_size = self.fg.size
+        self.fg.render((location[0]+(size[0]-_fg_size[0])/2, location[1]+(size[1]-_fg_size[1])/2))
+
+class Button(ElementABC):
+    _type: ButtonType
+    _state: ButtonState
+
+    def __init__(self, size, **kwargs):
+        super().__init__()
         self._sz = size
+        self._type = kwargs.get('type', ButtonType.DEFAULT)
+        self._state = ButtonState.OFF if self._type != ButtonType.DISABLE else ButtonState.DISABLED
+
+        fg = kwargs.get('fg', Rectangle(size, (0, 0, 0, 31)))
+        bg = kwargs.get('bg', None)
+        self._normal = _ButtonRenderHelper(fg, None, size) if not bg else _ButtonRenderHelper(fg, bg, size)
+
+        _h_fg = kwargs.get('hover_fg', fg)
+        _h_bg = kwargs.get('hover_bg', bg if bg else Rectangle(size, (0, 0, 0, 15)))
+        self._hover = Brightness(_ButtonRenderHelper(_h_fg, _h_bg, size), 15/16) if _h_fg is fg and _h_bg is bg else _ButtonRenderHelper(_h_fg, _h_bg, size)
+        
+        _c_fg = kwargs.get('clicked_fg', fg)
+        _c_bg = kwargs.get('clicked_bg', bg if bg else Rectangle(size, (0, 0, 0, 63)))
+        self._clicked = Brightness(_ButtonRenderHelper(_c_fg, _c_bg, size), 3/4) if _c_fg is fg and _c_bg is bg else _ButtonRenderHelper(_c_fg, _c_bg, size)
+
+        _d_fg = kwargs.get('disabled_fg', fg)
+        _d_bg = kwargs.get('disabled_bg', bg)
+        self._disabled = Opacity(_ButtonRenderHelper(_d_fg, _d_bg, size), 1/2) if _d_fg is fg and _d_bg is bg else _ButtonRenderHelper(_d_fg, _d_bg, size)
+
+        self._hovering = False
+        self._clicking = False
+
+        @self.event
+        def on_mouse_enter(): # pylint: disable=unused-variable
+            self._hovering = True
+            return True
+
+        @self.event
+        def on_mouse_leave(): # pylint: disable=unused-variable
+            self._hovering = False
+            return True
+
+        @self.event
+        def on_mouse_press(x, y, button, mods): # pylint: disable=unused-variable
+            self._clicking = True
+            return True
+
+        @self.event
+        def on_mouse_release(x, y, button, mods): # pylint: disable=unused-variable
+            if _current_backend().mouse.pressed() == _current_backend().mouse.NButton:
+                self._clicking = False
+                if self._type == ButtonType.DISABLE:
+                    return True
+                if 0 > x or 0 > y or x > self._sz[0] or y > self._sz[1]:
+                    self._hovering = False
+                elif self._type == ButtonType.TOGGLE:
+                    if self._state == ButtonState.OFF:
+                        self._state = ButtonState.ON
+                        self.dispatch('on_button_on')
+                    else:
+                        self._state = ButtonState.OFF
+                        self.dispatch('on_button_off')
+                else:
+                    self.dispatch('on_button_press')
+
+    @property
+    def size(self):
+        return self._sz
 
     @property
     def type(self):
         return self._type
 
     @type.setter
-    def size(self, type):
+    def type(self, type):
         self._type = type
+        if type == ButtonType.DISABLE:
+            self._state = ButtonState.DISABLED
+        elif type == ButtonType.DEFAULT:
+            self._state = ButtonState.OFF
 
     def render(self, location, size=None):
-        pass
+        if self._state == ButtonState.DISABLED:
+            self._disabled.render(location, size)
+        elif self._clicking:
+            self._clicked.render(location, size)
+        elif self._hovering and self._state == ButtonState.OFF:
+            self._hover.render(location, size)
+        elif self._state == ButtonState.OFF:
+            self._normal.render(location, size)
+        elif self._state == ButtonState.ON:
+            self._clicked.render(location, size)

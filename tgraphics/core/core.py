@@ -13,7 +13,6 @@ class Window:
 
     def __init__(self, _back):
         self._window = _back
-        self._mouse_target = None
 
         @self.event
         def on_mouse_press(x, y, button, mods): # pylint: disable=unused-variable
@@ -22,14 +21,17 @@ class Window:
             else:
                 assert self._current_mouse_interact is self, "mouse event not locked to a window after clicked"
 
-            return self._mouse_target.dispatch('on_mouse_press', x, y, button, mods)
+            if self.target_element:
+                return self.target_element.dispatch('on_mouse_press', x, y, button, mods)
+            else:
+                return False
 
         @self.event
         def on_mouse_drag(x, y, dx, dy, buttons): # pylint: disable=unused-variable
             assert self._current_mouse_interact is self, "mouse event not locked to a window after clicked"
 
-            if self._mouse_target:
-                return self._mouse_target.dispatch('on_mouse_drag', x, y, dx, dy, buttons)
+            if self.target_element:
+                return self.target_element.dispatch('on_mouse_drag', x, y, dx, dy, buttons)
             else:
                 return False
 
@@ -37,11 +39,8 @@ class Window:
         def on_mouse_release(x, y, button, mods): # pylint: disable=unused-variable
             assert self._current_mouse_interact is self, "mouse event not locked to a window after clicked"
 
-            if self._mouse_target:
-                return self._mouse_target.dispatch('on_mouse_release', x, y, button, mods)
-                if buttons == _current_backend().mouse.NButton:
-                    self._mouse_target = None
-                    self._current_mouse_interact = None
+            if self.target_element:
+                return self.target_element.dispatch('on_mouse_release', x, y, button, mods)
             else:
                 return False
 
@@ -78,6 +77,14 @@ class Window:
     @resizable.setter
     def resizable(self, resizable):
         self._window.resizable = resizable
+
+    @property
+    def size(self):
+        return self._window.size
+
+    @size.setter
+    def size(self, size):
+        self._window.size = size
 
     def icon(self, surface):
         self._window.set_icon(surface)

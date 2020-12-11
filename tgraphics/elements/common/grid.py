@@ -39,6 +39,8 @@ class Grid(ElementABC):
                 if not found:
                     self._mouse_target = sub
                     found = True
+                if self._mouse_enter is sub:
+                    return True
                 if self._mouse_enter is not sub:
                     if any([sub.element.dispatch('on_mouse_enter'), sub.element.dispatch('on_mouse_motion', *pos, dx, dy)]):
                         if self._mouse_enter:
@@ -143,7 +145,7 @@ class Grid(ElementABC):
 
     def _try_dispatch(self, event, x, y, *args, **kwargs):
         for sub, pos in self.elements_at(x, y, actual_loc=True):
-            if sub.element.dispatch('on_mouse_motion', *pos, *args, **kwargs):
+            if sub.element.dispatch(event, *pos, *args, **kwargs):
                 return sub
 
         return None

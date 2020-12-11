@@ -3,7 +3,7 @@ from functools import lru_cache
 import pygame
 from pygame.freetype import Font, SysFont
 
-from .pygame import _current_renderer, Surface, Texture
+from .pygame import current_renderer, Surface, Texture
 
 MAX_LINEAR_SCALEUP = 1.5
 
@@ -61,14 +61,13 @@ class Label:
         if height and self._textsurface.h * MAX_LINEAR_SCALEUP < height:
             self._gen_surface(height)
 
-        rdr = _current_renderer()
+        rdr = current_renderer()
         if rdr not in self._texttext or (height and self._texttext[rdr].h * MAX_LINEAR_SCALEUP < height):
             self._texttext[rdr] = Texture.from_surface(rdr, self._textsurface)
 
         if height:
-            bottom = (height / position[1] * position[0]) + position[0], height + position[1]
+            bottom = (height / position[1] * position[0]), height
         else:
-            _sz = self.size
-            bottom = _sz[0] + position[0], _sz[1] + position[1]
+            bottom = self.size
 
         self._texttext[rdr].blit_to_target(dst_rect_or_coord=(*position, *bottom))

@@ -13,7 +13,6 @@ del t
 del s
 del sys
 
-from . import mixin
 from . import shapes
 from . import text
 

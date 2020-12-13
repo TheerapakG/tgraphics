@@ -34,30 +34,40 @@ class _ButtonRenderHelper(ElementABC):
         _fg_size = self.fg.size
         self.fg.render((location[0]+(size[0]-_fg_size[0])/2, location[1]+(size[1]-_fg_size[1])/2))
 
+
+class _ButtonBGDefaultType:
+    def __bool__(self):
+        return False
+
+
+ButtonBGDefault = _ButtonBGDefaultType()
+
 class Button(ElementABC):
     _type: ButtonType
     _state: ButtonState
+    cls_kwargs = {'button_type', 'fg', 'bg', 'hover_fg', 'hover_bg', 'clicked_fg', 'clicked_bg', 'disabled_fg', 'disabled_bg'}
 
     def __init__(self, size, **kwargs):
         super().__init__()
         self._sz = size
-        self._type = kwargs.get('type', ButtonType.DEFAULT)
+        self._type = kwargs.pop('button_type', ButtonType.DEFAULT)
         self._state = ButtonState.OFF if self._type != ButtonType.DISABLE else ButtonState.DISABLED
 
-        fg = kwargs.get('fg', Rectangle(size, (0, 0, 0, 31)))
-        bg = kwargs.get('bg', None)
+        fg = kwargs.pop('fg', Rectangle(size, (0, 0, 0, 31)))
+        bg = kwargs.pop('bg', ButtonBGDefault)
+        _bg_default = bg is ButtonBGDefault
         self._normal = _ButtonRenderHelper(fg, None, size) if not bg else _ButtonRenderHelper(fg, bg, size)
 
-        _h_fg = kwargs.get('hover_fg', fg)
-        _h_bg = kwargs.get('hover_bg', bg if bg else Rectangle(size, (0, 0, 0, 15)))
+        _h_fg = kwargs.pop('hover_fg', fg)
+        _h_bg = kwargs.pop('hover_bg', bg if not _bg_default else Rectangle(size, (0, 0, 0, 15)))
         self._hover = Brightness(_ButtonRenderHelper(_h_fg, _h_bg, size), 15/16) if _h_fg is fg and _h_bg is bg else _ButtonRenderHelper(_h_fg, _h_bg, size)
         
-        _c_fg = kwargs.get('clicked_fg', fg)
-        _c_bg = kwargs.get('clicked_bg', bg if bg else Rectangle(size, (0, 0, 0, 63)))
+        _c_fg = kwargs.pop('clicked_fg', fg)
+        _c_bg = kwargs.pop('clicked_bg', bg if not _bg_default else Rectangle(size, (0, 0, 0, 63)))
         self._clicked = Brightness(_ButtonRenderHelper(_c_fg, _c_bg, size), 3/4) if _c_fg is fg and _c_bg is bg else _ButtonRenderHelper(_c_fg, _c_bg, size)
 
-        _d_fg = kwargs.get('disabled_fg', fg)
-        _d_bg = kwargs.get('disabled_bg', bg)
+        _d_fg = kwargs.pop('disabled_fg', fg)
+        _d_bg = kwargs.pop('disabled_bg', bg)
         self._disabled = Opacity(_ButtonRenderHelper(_d_fg, _d_bg, size), 1/2) if _d_fg is fg and _d_bg is bg else _ButtonRenderHelper(_d_fg, _d_bg, size)
 
         self._hovering = False

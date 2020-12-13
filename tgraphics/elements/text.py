@@ -2,7 +2,7 @@ from ..core.backend_loader import _current_backend
 from ..core.elementABC import ElementABC
 
 class Label(ElementABC):
-    def __init__(self, text, font_name, bold, italic, size, color=(255, 255, 255, 255)):
+    def __init__(self, text, size, *, font_name='', bold=False, italic=False, color=(255, 255, 255, 255)):
         super().__init__()
         self._instance = _current_backend().text.Label(text, font_name, bold, italic, size, color)
         self._static = True

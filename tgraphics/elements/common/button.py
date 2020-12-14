@@ -85,13 +85,20 @@ class Button(ElementABC):
 
         @self.event
         def on_mouse_press(x, y, button, mods): # pylint: disable=unused-variable
-            self._clicking = True
+            if button == _current_backend().mouse.MouseButton.LEFT:
+                self._clicking = True
             return True
 
         @self.event
         def on_mouse_release(x, y, button, mods): # pylint: disable=unused-variable
-            if _current_backend().mouse.pressed() == _current_backend().mouse.NButton:
+            if button == _current_backend().mouse.MouseButton.LEFT:
                 self._clicking = False
+            return True
+
+        @self.event
+        def on_mouse_last_release(x, y, button, mods): # pylint: disable=unused-variable
+            self._clicking = False
+            if button == _current_backend().mouse.MouseButton.LEFT:
                 if self._type == ButtonType.DISABLE:
                     return True
                 if 0 > x or 0 > y or x > self._sz[0] or y > self._sz[1]:
@@ -105,6 +112,7 @@ class Button(ElementABC):
                         self.dispatch('on_button_off')
                 else:
                     self.dispatch('on_button_press')
+            return True
 
     @property
     def size(self):

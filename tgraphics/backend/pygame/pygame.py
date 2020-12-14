@@ -547,16 +547,20 @@ def run():
                     continue
                 button = _mouse._mouse_from_pyg(event.button)
                 _mouses &= ~button
+                dispatch_event(window, 'on_mouse_release', *event.pos, button, pygame.key.get_mods())
                 if _mouses == _mouse.NButton:
                     sdl_capturemouse(False)
-                dispatch_event(window, 'on_mouse_release', *event.pos, button, pygame.key.get_mods())
+                    dispatch_event(window, 'on_mouse_last_release', *event.pos, button, pygame.key.get_mods())
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
                     continue
                 button = _mouse._mouse_from_pyg(event.button)
                 if _mouses == _mouse.NButton:
+                    _mouses |= button
                     sdl_capturemouse(True)
-                _mouses |= button
+                    dispatch_event(window, 'on_mouse_first_press', *event.pos, button, pygame.key.get_mods())
+                else:
+                    _mouses |= button
                 dispatch_event(window, 'on_mouse_press', *event.pos, button, pygame.key.get_mods())
             elif event.type == pygame.MOUSEWHEEL:
                 if event.flipped:

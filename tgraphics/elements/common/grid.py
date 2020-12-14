@@ -69,10 +69,7 @@ class Grid(ElementABC):
             return self._dispatch(self._mouse_press, 'on_mouse_drag', x, y, dx, dy, buttons)
 
         @self.event
-        def on_mouse_press(x, y, button, mods): # pylint: disable=unused-variable
-            if self._mouse_press:
-                self._dispatch(self._mouse_press, 'on_mouse_press', x, y, button, mods)
-                return True
+        def on_mouse_first_press(x, y, button, mods): # pylint: disable=unused-variable
             if self._mouse_target:
                 self._mouse_press = self._try_dispatch('on_mouse_press', x, y, button, mods)
                 if self._mouse_press:
@@ -83,34 +80,48 @@ class Grid(ElementABC):
             return False
 
         @self.event
+        def on_mouse_press(x, y, button, mods): # pylint: disable=unused-variable
+            if self._mouse_press:
+                self._dispatch(self._mouse_press, 'on_mouse_press', x, y, button, mods)
+                return True
+            return False
+
+        @self.event
         def on_mouse_release(x, y, button, mods): # pylint: disable=unused-variable
             if not self._mouse_press:
                 return False
 
             self._dispatch(self._mouse_press, 'on_mouse_release', x, y, button, mods)
-            if _current_backend().mouse.pressed() == _current_backend().mouse.NButton:
-                self._mouse_press = None
-                found = False
-                for sub, pos in self.elements_at(x, y, actual_loc=True):
-                    if not found:
-                        self._mouse_target = sub
-                        found = True
-                    if self._mouse_enter is sub:
-                        return True
-                    elif sub.element.dispatch('on_mouse_enter'):
-                        if self._mouse_enter:
-                            self._mouse_enter.element.dispatch('on_mouse_leave')
-                        self._mouse_enter = sub
-                        return True
-                
-                if self._mouse_enter:
-                    self._mouse_enter.dispatch('on_mouse_leave')
-                    self._mouse_enter = None
+            return True
 
+        @self.event
+        def on_mouse_last_release(x, y, button, mods): # pylint: disable=unused-variable
+            if not self._mouse_press:
+                return False
+
+            self._dispatch(self._mouse_press, 'on_mouse_last_release', x, y, button, mods)
+            self._mouse_press = None
+            found = False
+            for sub, pos in self.elements_at(x, y, actual_loc=True):
                 if not found:
-                    self._mouse_target = None
+                    self._mouse_target = sub
+                    found = True
+                if self._mouse_enter is sub:
+                    return True
+                elif sub.element.dispatch('on_mouse_enter'):
+                    if self._mouse_enter:
+                        self._mouse_enter.element.dispatch('on_mouse_leave')
+                    self._mouse_enter = sub
+                    return True
+            
+            if self._mouse_enter:
+                self._mouse_enter.dispatch('on_mouse_leave')
+                self._mouse_enter = None
 
-                return True
+            if not found:
+                self._mouse_target = None
+
+            return True
 
         @self.event
         def on_mouse_scroll(x, y, dx, dy): # pylint: disable=unused-variable

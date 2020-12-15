@@ -1,4 +1,5 @@
 from functools import lru_cache
+from operator import itemgetter
 
 import pygame
 from pygame.freetype import Font, SysFont
@@ -36,14 +37,17 @@ class Label:
         self._text = text
         self._font = _get_font(font_name, bold, italic)
         self._col = color
-        self._factor = INITIAL_FONT_PT/(self._font.get_sized_ascender(INITIAL_FONT_PT) - self._font.get_sized_descender(INITIAL_FONT_PT))
 
         self._texttext = dict()
         self._gen_surface(size)
         self._size = self._c_size
 
     def _gen_surface(self, height):
-        _surf, _bound = self._font.render(self._text, fgcolor=self._col, size=height*self._factor)
+        ascender = self._font.get_sized_ascender(height)
+        factor = height/(ascender - self._font.get_sized_descender(height))
+        self._c_off = ascender - max(self._font.get_metrics(self._text, size=height*factor), key=itemgetter(3))[3]
+
+        _surf, _bound = self._font.render(self._text, fgcolor=self._col, size=height*factor)
         self._textsurface = Surface(_surf)
         self._c_size = (self._textsurface.w, height)
 
@@ -57,11 +61,14 @@ class Label:
 
         rdr = current_renderer()
         if rdr not in self._texttext or (height and self._texttext[rdr][1][1] * MAX_LINEAR_SCALEUP < height):
-            self._texttext[rdr] = (Texture.from_surface(rdr, self._textsurface), self._c_size)
+            self._texttext[rdr] = (Texture.from_surface(rdr, self._textsurface), self._c_off, self._c_size[1])
 
-        if height:
-            bottom = (height / position[1] * position[0]), height
-        else:
-            bottom = self.size
+        height = height if height else self._size[1]
+        textinfo = self._texttext[rdr]
+        texture = textinfo[0]
+        factor = (height / textinfo[2])
 
-        self._texttext[rdr][0].blit_to_target(dst_rect_or_coord=(*position, *bottom))
+        position = (position[0], position[1] + textinfo[1]*factor)
+        bottom = (texture.w*factor, texture.h*factor)
+
+        texture.blit_to_target(dst_rect_or_coord=(*position, *bottom))

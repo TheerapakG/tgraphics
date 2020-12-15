@@ -239,6 +239,9 @@ class Surface:
     @property
     def size(self):
         return self._surface.get_size()
+
+    def subsurface(self, rect):
+        return Surface(self._surface.subsurface(rect))
         
     def blit_from(self, src, dst_coord, src_rect=None):
         """

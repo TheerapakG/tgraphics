@@ -7,7 +7,7 @@ from .pygame import current_renderer, Surface, Texture
 
 MAX_LINEAR_SCALEUP = 1.5
 
-INITIAL_FONT_PT = 20
+INITIAL_FONT_PT = 50
 
 @lru_cache(maxsize=128)
 def _get_font(font_name, bold, italic) -> Font:
@@ -35,39 +35,33 @@ class Label:
         """
         self._text = text
         self._font = _get_font(font_name, bold, italic)
-        self._size = size
         self._col = color
-        self._factor = None
+        self._factor = INITIAL_FONT_PT/(self._font.get_sized_ascender(INITIAL_FONT_PT) - self._font.get_sized_descender(INITIAL_FONT_PT))
 
         self._texttext = dict()
-        self._gen_surface(self._size)
+        self._gen_surface(size)
+        self._size = self._c_size
 
     def _gen_surface(self, height):
-        if not self._factor:
-            _surf, _bound = self._font.render(self._text, fgcolor=self._col, size=INITIAL_FONT_PT)
-            self._textsurface = Surface(_surf)
-            self._factor = INITIAL_FONT_PT/self._textsurface.h
-            if self._textsurface.h >= self._size:
-                return
-        
         _surf, _bound = self._font.render(self._text, fgcolor=self._col, size=height*self._factor)
         self._textsurface = Surface(_surf)
+        self._c_size = (self._textsurface.w, height)
 
     @property
     def size(self):
-        return self._size / self._textsurface.h * self._textsurface.w, self._size
+        return self._size
     
     def draw(self, position, height = None):
-        if height and self._textsurface.h * MAX_LINEAR_SCALEUP < height:
+        if height and self._c_size[1] * MAX_LINEAR_SCALEUP < height:
             self._gen_surface(height)
 
         rdr = current_renderer()
-        if rdr not in self._texttext or (height and self._texttext[rdr].h * MAX_LINEAR_SCALEUP < height):
-            self._texttext[rdr] = Texture.from_surface(rdr, self._textsurface)
+        if rdr not in self._texttext or (height and self._texttext[rdr][1][1] * MAX_LINEAR_SCALEUP < height):
+            self._texttext[rdr] = (Texture.from_surface(rdr, self._textsurface), self._c_size)
 
         if height:
             bottom = (height / position[1] * position[0]), height
         else:
             bottom = self.size
 
-        self._texttext[rdr].blit_to_target(dst_rect_or_coord=(*position, *bottom))
+        self._texttext[rdr][0].blit_to_target(dst_rect_or_coord=(*position, *bottom))

@@ -13,6 +13,11 @@ def add_element(element):
     y += element.size[1] + 32
 
 
+class DragableButton(tgraphics.mixin.DragableMixin, tgraphics.Button):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
 normal_label = tgraphics.text.Label("normal button", 64, color=(0, 0, 0, 255))
 normal_label_size = normal_label.size
 normal_button = tgraphics.Button((normal_label_size[0]+64, normal_label_size[1]+64), fg=normal_label)
@@ -34,6 +39,12 @@ disable_button = tgraphics.Button((disable_label_size[0]+64, disable_label_size[
 disable_button.event('on_button_press')(lambda: print('disable button pressed'))
 
 add_element(disable_button)
+
+dragable_label = tgraphics.text.Label("dragable button", 64, color=(0, 0, 0, 255))
+dragable_label_size = dragable_label.size
+dragable_button = DragableButton((dragable_label_size[0]+64, dragable_label_size[1]+64), fg=dragable_label)
+
+add_element(dragable_button)
 
 window.target_element = grid
 

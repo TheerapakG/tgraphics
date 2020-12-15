@@ -533,6 +533,8 @@ def run():
                 window = Window.get(_window)
             else:
                 window = None
+
+            # TODO: LoOkUp FuNcTiOnS!?!
             if event.type == pygame.QUIT:
                 _running = False
                 break

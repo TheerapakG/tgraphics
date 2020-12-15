@@ -1,9 +1,52 @@
+from collections import defaultdict
 from functools import partial
+
+class _DispatcherHelper:
+    def __init__(self, dispatcher):
+        self._d = dispatcher
+
+    def __call__(self, func, *, name=None):
+        """
+        add event handler via decorator
+        """
+        if isinstance(func, str):
+            return partial(self.__call__, name=func)
+        self[name if name else func.__name__] = func
+
+    def __getitem__(self, name):
+        class _EventHelper:
+            def __init__(self, dispatcher, name):
+                self._d = dispatcher
+                self._n = name
+
+            @property
+            def handler(self):
+                try:
+                    return self._d._handlers[self._n]
+                except KeyError:
+                    return None
+
+            def add_listener(self, listener):
+                self._d._listeners[self._n].append(listener)
+
+            def remove_listener(self, listener):
+                self._d._listeners[self._n].remove(listener)
+
+        return _EventHelper(self._d, name)
+
+    def __setitem__(self, name, func):
+        if func is not None:
+            self._d._handlers[name] = func
+        else:
+            del self._d._handlers[name]
+
 
 class EventDispatcher:
     def __init__(self):
         self._t = None
         self._handlers = dict()
+        self._listeners = defaultdict(list)
+        self._e_helper = _DispatcherHelper(self)
 
     @property
     def target(self):
@@ -13,28 +56,23 @@ class EventDispatcher:
     def target(self, target):
         self._t = target
 
-    def event(self, func, *, name=None):
-        """
-        add event handler
-        """
-        if isinstance(func, str):
-            return partial(self.event, name=func)
-        if func is not None:
-            self._handlers[name if name else func.__name__] = func
-        else:
-            del self._handlers[name]
+    @property
+    def event(self):
+        return self._e_helper
 
     @property
     def handlers(self):
         _h = self._t.handlers if self._t is not None else set()
-        return _h | set(self._handlers.keys())
+        return _h | set(self._handlers.keys()) | {e for e, ls in self._listeners.items() if ls}
             
     def dispatch(self, event, *args, **kwargs):
+        # comprehension is often faster
+        res = any([ls(*args, **kwargs) for ls in self._listeners[event]])
         try:
-            return self._handlers[event](*args, **kwargs)
+            return self._handlers[event](*args, **kwargs) or res
         except KeyError:
             if self._t:
-                return self._t.dispatch(event, *args, **kwargs)
+                return self._t.dispatch(event, *args, **kwargs) or res
             else:
                 return True
                 # TODO: log?       

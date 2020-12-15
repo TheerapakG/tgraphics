@@ -13,9 +13,32 @@ else:
     List = list
     Tuple = tuple
 
-class Subelement(NamedTuple):
+class Subelement:
     element: ElementABC
     offset: Tuple[int, int]
+
+    def __init__(self, element, offset):
+        self.element = element
+        self.offset = offset
+
+    def __iter__(self):
+        return iter((self.element, self.offset))
+
+    def __getitem__(self, value):
+        if value == 0:
+            return self.element
+        elif value == 1:
+            return self.offset
+        else:
+            raise IndexError('index out of range')
+
+    def __setitem__(self, value, item):
+        if value == 0:
+            self.element = item
+        elif value == 1:
+            self.offset = item
+        else:
+            raise IndexError('index out of range')
 
 class Grid(ElementABC):
     _sub: List[Subelement]
@@ -71,7 +94,7 @@ class Grid(ElementABC):
         @self.event
         def on_mouse_first_press(x, y, button, mods): # pylint: disable=unused-variable
             if self._mouse_target:
-                self._mouse_press = self._try_dispatch('on_mouse_press', x, y, button, mods)
+                self._mouse_press = self._try_dispatch('on_mouse_first_press', x, y, button, mods)
                 if self._mouse_press:
                     if self._mouse_press is not self._mouse_enter:
                         self._mouse_enter.element.dispatch('on_mouse_leave')
@@ -161,22 +184,45 @@ class Grid(ElementABC):
 
         return None
 
+    def _on_child_position_changed(self, child, dx, dy):
+        match = next(sub for sub in self._sub if sub.element is child)
+        n_off = match.offset
+        match.offset = (n_off[0] + dx, n_off[1] + dy)
+
     def add_child(self, index, child: ElementABC, position):
+        """
+        add a child element
+
+        note: adding the same element which its position may change might result in an unexpected behavior
+        """
+        child.event['on_position_changed'].add_listener(self._on_child_position_changed)
         self._sub.insert(index, Subelement(child, position))
 
     def add_child_top(self, child: ElementABC, position):
+        """
+        add a child element on top
+
+        note: adding the same element which its position may change might result in an unexpected behavior
+        """
+        child.event['on_position_changed'].add_listener(self._on_child_position_changed)
         self._sub.append(Subelement(child, position))
 
     def remove_child(self, child: Union[int, ElementABC, Subelement]):
         if isinstance(child, Subelement):
             self._sub.remove(child)
         elif isinstance(child, int):
-            self._sub.pop(child)
+            child = self._sub.pop(child)
         else:
             assert isinstance(child, ElementABC), 'unrecognized grid.remove_child child argument type'
             # construction via comprehensions should be the fastest way to do this in just Python
             _idx = {i for i, sub in enumerate(self._sub) if sub.element is child}
+            childs = [sub for i, sub in enumerate(self._sub) if i not in _idx]
             self._sub = [sub for i, sub in enumerate(self._sub) if i not in _idx]
+            for child in childs:
+                child.element.event['on_position_changed'].remove_listener(self._on_child_position_changed)
+            return
+        
+        child.element.event['on_position_changed'].remove_listener(self._on_child_position_changed)
 
     def remove_child_top(self):
         self._sub.pop()

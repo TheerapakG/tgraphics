@@ -15,18 +15,25 @@ def add_element(element):
 
 normal_label = tgraphics.text.Label("normal button", 64, color=(0, 0, 0, 255))
 normal_label_size = normal_label.size
+normal_button = tgraphics.Button((normal_label_size[0]+64, normal_label_size[1]+64), fg=normal_label)
+normal_button.event('on_button_press')(lambda: print('normal button pressed'))
 
-add_element(tgraphics.Button((normal_label_size[0]+64, normal_label_size[1]+64), fg=normal_label))
+add_element(normal_button)
 
 toggle_label = tgraphics.text.Label("toggle button", 64, color=(0, 0, 0, 255))
 toggle_label_size = toggle_label.size
+toggle_button = tgraphics.Button((toggle_label_size[0]+64, toggle_label_size[1]+64), fg=toggle_label, button_type=tgraphics.ButtonType.TOGGLE)
+toggle_button.event('on_button_on')(lambda: print('button toggled on'))
+toggle_button.event('on_button_off')(lambda: print('button toggled off'))
 
-add_element(tgraphics.Button((toggle_label_size[0]+64, toggle_label_size[1]+64), fg=toggle_label, button_type=tgraphics.ButtonType.TOGGLE))
+add_element(toggle_button)
 
 disable_label = tgraphics.text.Label("disabled button", 64, color=(0, 0, 0, 255))
 disable_label_size = disable_label.size
+disable_button = tgraphics.Button((disable_label_size[0]+64, disable_label_size[1]+64), fg=disable_label, button_type=tgraphics.ButtonType.DISABLE)
+disable_button.event('on_button_press')(lambda: print('disable button pressed'))
 
-add_element(tgraphics.Button((disable_label_size[0]+64, disable_label_size[1]+64), fg=disable_label, button_type=tgraphics.ButtonType.DISABLE))
+add_element(disable_button)
 
 window.target_element = grid
 

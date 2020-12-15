@@ -525,7 +525,8 @@ def run():
     _mouses = _mouse._mouse_from_pygtpl(pygame.mouse.get_pressed(5))
     while _running:
         for event in pygame.event.get():
-            if _window := getattr(event, 'window', None):
+            _window = getattr(event, 'window', None)
+            if _window:
                 window = Window.get(_window)
             else:
                 window = None

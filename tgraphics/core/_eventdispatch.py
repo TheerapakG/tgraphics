@@ -15,24 +15,34 @@ class _DispatcherHelper:
 
     def __getitem__(self, name):
         class _EventHelper:
-            def __init__(self, dispatcher, name):
-                self._d = dispatcher
+            def __init__(self, dhelper, name):
+                self._dh = dhelper
                 self._n = name
+
+            def __call__(self, func):
+                """
+                add event handler via decorator
+                """
+                self._dh[self._n] = func
 
             @property
             def handler(self):
                 try:
-                    return self._d._handlers[self._n]
+                    return self._dh._d._handlers[self._n]
                 except KeyError:
                     return None
 
+            @handler.setter
+            def handler(self, func):
+                self(func)
+
             def add_listener(self, listener):
-                self._d._listeners[self._n].append(listener)
+                self._dh._d._listeners[self._n].append(listener)
 
             def remove_listener(self, listener):
-                self._d._listeners[self._n].remove(listener)
+                self._dh._d._listeners[self._n].remove(listener)
 
-        return _EventHelper(self._d, name)
+        return _EventHelper(self, name)
 
     def __setitem__(self, name, func):
         if func is not None:

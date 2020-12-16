@@ -1,3 +1,4 @@
+import itertools
 from typing import NamedTuple, Optional, Union
 from pygame import Rect
 
@@ -54,6 +55,11 @@ class Grid(ElementABC):
         self._mouse_target = None
         self._mouse_enter = None
         self._mouse_press = None
+        # TODO: decorator and some metaclass shenanigans?
+        self._listener_dict = {
+            'on_position_changed': self._on_child_position_changed,
+            'on_element_dropped': self._on_child_element_dropped
+        }
 
         @self.event
         def on_mouse_motion(x, y, dx, dy): # pylint: disable=unused-variable
@@ -156,7 +162,7 @@ class Grid(ElementABC):
             
             return False
 
-    def elements_at(self, x, y, actual_loc = False) -> Iterator[Tuple[Subelement, Tuple[int, int]]]:
+    def elements_at(self, x, y, actual_loc=False, after=None) -> Iterator[Tuple[Subelement, Tuple[int, int]]]:
         """
         get all elements from top to bottom at x, y
         """
@@ -164,12 +170,21 @@ class Grid(ElementABC):
             _req_loc = (x + self._loc[0], y + self._loc[1])
         else:
             _req_loc = (x, y)
+        if after:
+            _found = False
+        else:
+            _found = True
         for sub in reversed(self._sub):
-            _sub_loc = (_req_loc[0] - sub.offset[0], _req_loc[1] - sub.offset[1])
-            if 0 <= _sub_loc[0] and 0 <= _sub_loc[1]:
-                _sz = sub.element.size
-                if _sub_loc[0] <= _sz[0] and _sub_loc[1] <= _sz[1]:
-                    yield sub, _sub_loc
+            if _found:
+                _sub_loc = (_req_loc[0] - sub.offset[0], _req_loc[1] - sub.offset[1])
+                if 0 <= _sub_loc[0] and 0 <= _sub_loc[1]:
+                    _sz = sub.element.size
+                    if _sub_loc[0] <= _sz[0] and _sub_loc[1] <= _sz[1]:
+                        yield sub, _sub_loc
+                continue
+            
+            if sub is after or sub.element is after:
+                _found = True
 
     def _dispatch(self, sub: Optional[Subelement], event, x, y, *args, **kwargs):
         if sub:
@@ -177,17 +192,34 @@ class Grid(ElementABC):
         else:
             return False
 
-    def _try_dispatch(self, event, x, y, *args, **kwargs):
-        for sub, pos in self.elements_at(x, y, actual_loc=True):
+    def _try_dispatch(self, event, x, y, *args, _dispatch_after=None, _tries=None, **kwargs):
+        tries = range(_tries) if _tries else itertools.count()
+        for (sub, pos), _ in zip(self.elements_at(x, y, actual_loc=True, after=_dispatch_after), tries):
             if sub.element.dispatch(event, *pos, *args, **kwargs):
                 return sub
 
         return None
 
-    def _on_child_position_changed(self, child, dx, dy):
+    def _on_child_position_changed(self, dx, dy, child):
         match = next(sub for sub in self._sub if sub.element is child)
         n_off = match.offset
         match.offset = (n_off[0] + dx, n_off[1] + dy)
+        return True
+
+    def _on_child_element_dropped(self, child, x, y):
+        match = next((sub for sub in self._sub if sub.element is child), None)
+        if match:
+            n_off = match.offset
+            self._try_dispatch('on_element_dropped', n_off[0] + x, n_off[1] + y, child, _dispatch_after=child, _tries=1)
+        return True
+
+    def _add_listeners(self, child: ElementABC):
+        for e, h in self._listener_dict.items():
+            child.event[e].add_listener(h)
+
+    def _remove_listeners(self, child: ElementABC):
+        for e, h in self._listener_dict.items():
+            child.event[e].remove_listener(h)
 
     def add_child(self, index, child: ElementABC, position):
         """
@@ -195,7 +227,7 @@ class Grid(ElementABC):
 
         note: adding the same element which its position may change might result in an unexpected behavior
         """
-        child.event['on_position_changed'].add_listener(self._on_child_position_changed)
+        self._add_listeners(child)
         self._sub.insert(index, Subelement(child, position))
 
     def add_child_top(self, child: ElementABC, position):
@@ -204,7 +236,7 @@ class Grid(ElementABC):
 
         note: adding the same element which its position may change might result in an unexpected behavior
         """
-        child.event['on_position_changed'].add_listener(self._on_child_position_changed)
+        self._add_listeners(child)
         self._sub.append(Subelement(child, position))
 
     def remove_child(self, child: Union[int, ElementABC, Subelement]):
@@ -219,10 +251,10 @@ class Grid(ElementABC):
             childs = [sub for i, sub in enumerate(self._sub) if i not in _idx]
             self._sub = [sub for i, sub in enumerate(self._sub) if i not in _idx]
             for child in childs:
-                child.element.event['on_position_changed'].remove_listener(self._on_child_position_changed)
+                self._remove_listeners(child.element)
             return
         
-        child.element.event['on_position_changed'].remove_listener(self._on_child_position_changed)
+        self._remove_listeners(child.element)
 
     def remove_child_top(self):
         self._sub.pop()

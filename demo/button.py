@@ -10,13 +10,29 @@ y = 0
 def add_element(element):
     global y
     grid.add_child_top(element, (0, y))
-    y += element.size[1] + 32
+    y += element.size[1] + 16
 
 
 class DragableButton(tgraphics.mixin.DragableMixin, tgraphics.Button):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+
+class DropSensor(tgraphics.Grid):
+    def __init__(self, text):
+        label = tgraphics.text.Label(text, 64, color=(255, 255, 255, 255))
+        label_size = label.size
+        sz = (label_size[0]+64, label_size[1]+64)
+        super().__init__(sz)
+        self.add_child_top(tgraphics.shapes.Rectangle(sz, color=(128, 128, 128, 255)), (0, 0))
+        self.add_child_top(label, (32, 32))
+
+        @self.event
+        def on_element_dropped(x, y, element):
+            print(element, 'dropped inside sensor at ({x}, {y})'.format(x=x, y=y))
+
+
+add_element(DropSensor('maybe try dropping element here'))
 
 normal_label = tgraphics.text.Label("normal button", 64, color=(0, 0, 0, 255))
 normal_label_size = normal_label.size

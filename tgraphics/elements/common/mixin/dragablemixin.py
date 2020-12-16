@@ -40,7 +40,7 @@ class DragableMixin(ElementABC):
             res = self._on_mouse_release(x, y, button, mods)
             if button == _current_backend().mouse.LEFT:
                 self._l_pos = None
-                self.dispatch('on_element_dropped', x, y, self)
+                self.dispatch('on_this_dropped', x, y, this=self)
                 return True
             return res
 

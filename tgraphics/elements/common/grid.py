@@ -58,7 +58,7 @@ class Grid(ElementABC):
         # TODO: decorator and some metaclass shenanigans?
         self._listener_dict = {
             'on_position_changed': self._on_child_position_changed,
-            'on_element_dropped': self._on_child_element_dropped
+            'on_this_dropped': self._on_child_this_dropped
         }
 
         @self.event
@@ -206,11 +206,11 @@ class Grid(ElementABC):
         match.offset = (n_off[0] + dx, n_off[1] + dy)
         return True
 
-    def _on_child_element_dropped(self, child, x, y):
-        match = next((sub for sub in self._sub if sub.element is child), None)
+    def _on_child_this_dropped(self, x, y, this):
+        match = next((sub for sub in self._sub if sub.element is this), None)
         if match:
             n_off = match.offset
-            self._try_dispatch('on_element_dropped', n_off[0] + x, n_off[1] + y, child, _dispatch_after=child, _tries=1)
+            self._try_dispatch('on_element_dropped', n_off[0] + x, n_off[1] + y, this, _dispatch_after=this, _tries=1)
         return True
 
     def _add_listeners(self, child: ElementABC):
@@ -292,6 +292,6 @@ class Grid(ElementABC):
     def render(self, location, size=None):
         for c, pos in self._sub:
             _sz = c.size
-            x, y = location[0] + pos[0], location[1] + pos[1]
+            x, y = pos
             if x <= self._loc[0] + self._sz[0] and y <= self._loc[1] + self._sz[1] and x + _sz[0] >= self._loc[0] and y + _sz[1] >= self._loc[1]:
-                c.render((x, y), None if not size else (size[0] / self._sz[0] * _sz[0], size[1] / self._sz[1] * _sz[1]))
+                c.render((location[0] + x, location[1] + y), None if not size else (size[0] / self._sz[0] * _sz[0], size[1] / self._sz[1] * _sz[1]))

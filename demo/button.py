@@ -26,10 +26,32 @@ class DropSensor(tgraphics.Grid):
         super().__init__(sz)
         self.add_child_top(tgraphics.shapes.Rectangle(sz, color=(128, 128, 128, 255)), (0, 0))
         self.add_child_top(label, (32, 32))
+        self._dark_rect = tgraphics.shapes.Rectangle(sz, color=(0, 0, 0, 255))
 
         @self.event
         def on_element_dropped(x, y, element):
+            self.dark(False)
             print(element, 'dropped inside sensor at ({x}, {y})'.format(x=x, y=y))
+            return True
+
+        @self.event
+        def on_element_enter(element):
+            self.dark(True)
+            return True
+
+        @self.event
+        def on_element_leave(element):
+            self.dark(False)
+            return True
+
+    def dark(self, dark):
+        if dark:
+            self.add_child(1, self._dark_rect, (0, 0))
+        else:
+            try:
+                self.remove_child(self._dark_rect)
+            except ValueError:
+                pass
 
 
 add_element(DropSensor('maybe try dropping element here'))

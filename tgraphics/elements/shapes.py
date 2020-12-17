@@ -11,10 +11,6 @@ class _ShapeReflectorMixin:
     def color(self):
         return self._instance.color
 
-    @color.setter
-    def color(self, value):
-        self._instance.color = value
-
     def __getattr__(self, name):
         try:
             return getattr(self._instance, name)

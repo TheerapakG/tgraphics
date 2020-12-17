@@ -46,6 +46,7 @@ class Grid(ElementABC):
     _mouse_target: Optional[Subelement]
     _mouse_enter: Optional[Subelement]
     _mouse_press: Optional[Subelement]
+    _element_enter: Optional[Subelement]
 
     def __init__(self, size):
         super().__init__()
@@ -55,10 +56,12 @@ class Grid(ElementABC):
         self._mouse_target = None
         self._mouse_enter = None
         self._mouse_press = None
+        self._element_enter = None
         # TODO: decorator and some metaclass shenanigans?
         self._listener_dict = {
             'on_position_changed': self._on_child_position_changed,
-            'on_this_dropped': self._on_child_this_dropped
+            'on_this_dropped': self._on_child_this_dropped,
+            'on_this_dragged': self._on_child_this_dragged
         }
 
         @self.event
@@ -206,11 +209,38 @@ class Grid(ElementABC):
         match.offset = (n_off[0] + dx, n_off[1] + dy)
         return True
 
-    def _on_child_this_dropped(self, x, y, this):
+    def _on_child_this_dropped(self, this):
         match = next((sub for sub in self._sub if sub.element is this), None)
         if match:
             n_off = match.offset
-            self._try_dispatch('on_element_dropped', n_off[0] + x, n_off[1] + y, this, _dispatch_after=this, _tries=1)
+            sz = this.size
+            child_pos = (n_off[0] + (sz[0]/2), n_off[1] + (sz[1]/2))
+            if self._try_dispatch('on_element_dropped', *child_pos, this, _dispatch_after=this) is not self._element_enter:
+                if self._element_enter:
+                    self._element_enter.element.dispatch('on_element_leave', this)
+            self._element_enter = None
+        return True
+
+    def _on_child_this_dragged(self, this):
+        match = next((sub for sub in self._sub if sub.element is this), None)
+        if match:
+            n_off = match.offset
+            sz = this.size
+            child_pos = (n_off[0] + (sz[0]/2), n_off[1] + (sz[1]/2))
+            for sub, pos in self.elements_at(*child_pos, actual_loc=True, after=this):
+                if sub is self._element_enter:
+                    self._dispatch(sub, 'on_element_motion', *child_pos, this)
+                    break
+                elif sub.element.dispatch('on_element_enter', this):
+                    if self._element_enter:
+                        self._element_enter.element.dispatch('on_element_leave', this)
+                    self._element_enter = sub
+                    break
+            else:
+                if self._element_enter:
+                    self._element_enter.element.dispatch('on_element_leave', this)
+                self._element_enter = None
+
         return True
 
     def _add_listeners(self, child: ElementABC):

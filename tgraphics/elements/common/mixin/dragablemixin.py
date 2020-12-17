@@ -16,6 +16,18 @@ class DragableMixin(ElementABC):
             res = self._on_mouse_first_press(x, y, button, mods)
             if button == _current_backend().mouse.LEFT:
                 self._l_pos = self._pos
+                self.dispatch('on_this_dragged', this=self)
+                return True
+            return res
+
+        e_h = self.event['on_mouse_press'].handler
+        self._on_mouse_press = e_h if e_h is not None else lambda *args, **kwargs: True
+
+        @self.event
+        def on_mouse_press(x, y, button, mods): 
+            res = self._on_mouse_press(x, y, button, mods)
+            if button != _current_backend().mouse.LEFT:
+                self._l_pos = None
                 return True
             return res
 
@@ -29,6 +41,7 @@ class DragableMixin(ElementABC):
                 self._l_pos = (self._l_pos[0] + dx, self._l_pos[1] + dy)
                 _n_pos = self._transform_f(*self._l_pos) if self._transform_f else self._l_pos
                 self.pos = _n_pos
+                self.dispatch('on_this_dragged', this=self)
                 return True
             return res
 
@@ -38,9 +51,10 @@ class DragableMixin(ElementABC):
         @self.event
         def on_mouse_release(x, y, button, mods): 
             res = self._on_mouse_release(x, y, button, mods)
-            if button == _current_backend().mouse.LEFT:
+            mouse = _current_backend().mouse
+            if button == mouse.LEFT and self._l_pos:
                 self._l_pos = None
-                self.dispatch('on_this_dropped', x, y, this=self)
+                self.dispatch('on_this_dropped', this=self)
                 return True
             return res
 

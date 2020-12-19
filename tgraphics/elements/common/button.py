@@ -84,34 +84,31 @@ class Button(ElementABC):
             return True
 
         @self.event
-        def on_mouse_press(x, y, button, mods): # pylint: disable=unused-variable
+        def on_mouse_press(x, y, button, mods, first): # pylint: disable=unused-variable
             if button == _current_backend().mouse.MouseButton.LEFT:
                 self._clicking = True
             return True
 
         @self.event
-        def on_mouse_release(x, y, button, mods): # pylint: disable=unused-variable
+        def on_mouse_release(x, y, button, mods, last): # pylint: disable=unused-variable
             if button == _current_backend().mouse.MouseButton.LEFT:
-                self._clicking = False
-            return True
-
-        @self.event
-        def on_mouse_last_release(x, y, button, mods): # pylint: disable=unused-variable
-            self._clicking = False
-            if button == _current_backend().mouse.MouseButton.LEFT:
-                if self._type == ButtonType.DISABLE:
-                    return True
-                if 0 > x or 0 > y or x > self._sz[0] or y > self._sz[1]:
-                    self._hovering = False
-                elif self._type == ButtonType.TOGGLE:
-                    if self._state == ButtonState.OFF:
-                        self._state = ButtonState.ON
-                        self.dispatch('on_button_on')
+                self._clicking = False                
+                if last:
+                    if self._type == ButtonType.DISABLE:
+                        return True
+                    if 0 > x or 0 > y or x > self._sz[0] or y > self._sz[1]:
+                        self._hovering = False
+                    elif self._type == ButtonType.TOGGLE:
+                        if self._state == ButtonState.OFF:
+                            self._state = ButtonState.ON
+                            self.dispatch('on_button_on')
+                        else:
+                            self._state = ButtonState.OFF
+                            self.dispatch('on_button_off')
                     else:
-                        self._state = ButtonState.OFF
-                        self.dispatch('on_button_off')
-                else:
-                    self.dispatch('on_button_press')
+                        self.dispatch('on_button_press')
+            elif last:
+                self._clicking = False 
             return True
 
     @property

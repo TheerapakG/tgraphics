@@ -35,6 +35,11 @@ class DropSensor(tgraphics.Grid):
             return True
 
         @self.event
+        def on_element_undropped(x, y, element):
+            self.dark(False)
+            return True
+
+        @self.event
         def on_element_enter(element):
             self.dark(True)
             return True

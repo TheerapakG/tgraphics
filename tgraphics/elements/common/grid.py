@@ -63,6 +63,7 @@ class Grid(ElementABC):
         self._listener_dict = {
             'on_position_changed': self._on_child_position_changed,
             'on_this_dropped': self._on_child_this_dropped,
+            'on_this_undropped': self._on_child_this_undropped,
             'on_this_dragged': self._on_child_this_dragged
         }
 
@@ -184,8 +185,19 @@ class Grid(ElementABC):
 
         @self.event
         def on_element_dropped(x, y, element):
-            if self._element_target and self._try_dispatch('on_element_dropped', x, y, element):
-                return True
+            if self._element_target:
+                self._element_target = None
+                self._element_enter = None
+                return self._try_dispatch('on_element_dropped', x, y, element)
+
+            return False
+
+        @self.event
+        def on_element_undropped(x, y, element):
+            if self._element_target:
+                self._element_target = None
+                self._element_enter = None
+                return self._try_dispatch('on_element_undropped', x, y, element)
 
             return False
 
@@ -250,6 +262,18 @@ class Grid(ElementABC):
             sz = this.size
             child_pos = (n_off[0] + (sz[0]/2), n_off[1] + (sz[1]/2))
             if self._try_dispatch('on_element_dropped', *child_pos, this, _dispatch_after=this) is not self._element_enter:
+                if self._element_enter:
+                    self._element_enter.element.dispatch('on_element_leave', this)
+            self._element_enter = None
+        return True
+
+    def _on_child_this_undropped(self, this):
+        match = next((sub for sub in self._sub if sub.element is this), None)
+        if match:
+            n_off = match.offset
+            sz = this.size
+            child_pos = (n_off[0] + (sz[0]/2), n_off[1] + (sz[1]/2))
+            if self._try_dispatch('on_element_undropped', *child_pos, this, _dispatch_after=this) is not self._element_enter:
                 if self._element_enter:
                     self._element_enter.element.dispatch('on_element_leave', this)
             self._element_enter = None

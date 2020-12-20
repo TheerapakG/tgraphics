@@ -21,6 +21,7 @@ class DragableMixin(ElementABC):
                 return True
             if not first and button != _current_backend().mouse.LEFT:
                 self._l_pos = None
+                self.dispatch('on_this_undropped', this=self)
                 return True
             return res
 

@@ -2,8 +2,9 @@ from enum import auto, Enum
 
 from ...core.backend_loader import _current_backend
 from ...core.elementABC import ElementABC
-from ..shapes import Rectangle
 from ..filters import Brightness, Opacity
+from ..shapes import Rectangle
+from ..text import Label
 
 class ButtonType(Enum):
     DEFAULT = auto()
@@ -138,3 +139,21 @@ class Button(ElementABC):
             self._normal.render(location, size)
         elif self._state == ButtonState.ON:
             self._clicked.render(location, size)
+
+
+class LabelButton(Button):
+    def __init__(self, size, text=None, text_size=None, *, font_name='', bold=False, italic=False, color=(255, 255, 255, 255), _text_label=None, **kwargs):
+        if not _text_label:
+            _text_label = Label(text, text_size, font_name=font_name, bold=bold, italic=italic, color=color)
+        super().__init__(size, fg=_text_label, **kwargs)
+
+    @classmethod
+    def with_margin(cls, text, text_size, margin, marginy=None, *, font_name='', bold=False, italic=False, color=(255, 255, 255, 255), **kwargs):
+        label = Label(text, text_size, font_name=font_name, bold=bold, italic=italic, color=color)
+        sz = label.size
+        if not marginy:
+            sz = (sz[0] + margin, sz[1] + margin)
+        else:
+            sz = (sz[0] + margin, sz[1] + marginy)
+        return cls(sz, _text_label=label, **kwargs)
+        

@@ -488,8 +488,8 @@ def _default_draw(window: Window):
     renderer.target = None
     renderer.clear()
     _CurrentRenderer = renderer
-    window.dispatch('on_draw')
-    renderer.update()
+    if window.dispatch('on_draw'):
+        renderer.update()
 
 class InvalidRendererStateException(Exception):
     pass

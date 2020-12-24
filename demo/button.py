@@ -35,11 +35,6 @@ class DropSensor(tgraphics.Grid):
             return True
 
         @self.event
-        def on_element_undropped(x, y, element):
-            self.dark(False)
-            return True
-
-        @self.event
         def on_element_enter(element):
             self.dark(True)
             return True
@@ -82,6 +77,7 @@ dragable_button = DragableButton.with_margin("dragable button", 64, 64, color=(0
 add_element(dragable_button)
 
 window.target_element = grid
+window.fps = 60
 
 tgraphics.run()
 

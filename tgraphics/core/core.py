@@ -1,4 +1,6 @@
 from functools import partial
+import datetime
+import time
 
 from .backend_loader import _current_backend
 
@@ -13,6 +15,11 @@ class Window:
 
     def __init__(self, _back):
         self._window = _back
+        self._last_frame_time = None
+        self._current_frame_time = None
+        self._draw_time = datetime.timedelta()
+        self._frame_delta = None
+        self._target_fps = None
 
         @self.event
         def on_mouse_press(x, y, button, mods, first): # pylint: disable=unused-variable
@@ -91,6 +98,35 @@ class Window:
 
     icon = property(None, icon)
 
+    def _on_draw(self, element):
+        current_time = time.perf_counter()
+        if self._target_fps and self._current_frame_time:
+            if datetime.timedelta(seconds=current_time - self._current_frame_time) + self._draw_time < datetime.timedelta(seconds=1) / self._target_fps:
+                return False
+        element.render((0, 0))
+        self._last_frame_time, self._current_frame_time = self._current_frame_time, time.perf_counter()
+        self._draw_time = datetime.timedelta(seconds=self._current_frame_time - current_time)
+        if self._last_frame_time:
+            self._frame_delta = datetime.timedelta(seconds=self._current_frame_time - self._last_frame_time)
+        self._window.dispatch('on_draw_finished')
+        return True
+
+    @property
+    def frame_time(self):
+        return self._frame_delta
+
+    @property
+    def fps(self):
+        if self._frame_delta is not None:
+            try:
+                return datetime.timedelta(seconds=1)/self._frame_delta
+            except ZeroDivisionError:
+                return None
+
+    @fps.setter
+    def fps(self, fps):
+        self._target_fps = fps
+
     @property
     def target_element(self):
         return _WindowsBoundedElement[self]
@@ -99,7 +135,7 @@ class Window:
     def target_element(self, element):
         _WindowsBoundedElement[self] = element
         if element:
-            self._window.event('on_draw')(partial(element.render, (0, 0)))
+            self._window.event('on_draw')(partial(self._on_draw, element))
             self._window.target = element
         else:
             self._window.event('on_draw')(None)

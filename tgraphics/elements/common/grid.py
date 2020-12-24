@@ -268,15 +268,9 @@ class Grid(ElementABC):
         return True
 
     def _on_child_this_undropped(self, this):
-        match = next((sub for sub in self._sub if sub.element is this), None)
-        if match:
-            n_off = match.offset
-            sz = this.size
-            child_pos = (n_off[0] + (sz[0]/2), n_off[1] + (sz[1]/2))
-            if self._try_dispatch('on_element_undropped', *child_pos, this, _dispatch_after=this) is not self._element_enter:
-                if self._element_enter:
-                    self._element_enter.element.dispatch('on_element_leave', this)
-            self._element_enter = None
+        if self._element_enter:
+            self._element_enter.element.dispatch('on_element_leave', this)
+        self._element_enter = None
         return True
 
     def _on_child_this_dragged(self, this):

@@ -377,3 +377,59 @@ class Grid(ElementABC):
             x, y = pos
             if x <= self._loc[0] + self._sz[0] and y <= self._loc[1] + self._sz[1] and x + _sz[0] >= self._loc[0] and y + _sz[1] >= self._loc[1]:
                 c.render((location[0] + x, location[1] + y), None if not size else (size[0] / self._sz[0] * _sz[0], size[1] / self._sz[1] * _sz[1]))
+
+
+class StaticGridError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
+class StaticGrid(Grid):
+    def __init__(self, size):
+        super().__init__(size)
+        self._static = True
+        self._rendered = False
+
+    def _check_rendered(self):
+        if self._rendered:
+            raise StaticGridError("grid is already rendered, cannot be modified")
+
+    def _check_child_static(self, child: ElementABC):
+        if not child.static:
+            raise StaticGridError("static grid requires its children to be static elements")
+
+    def _on_child_position_changed(self, dx, dy, child):
+        return False
+
+    def add_child(self, index, child: ElementABC, position):
+        """
+        add a child element
+
+        note: adding the same element which its position may change might result in an unexpected behavior
+        """
+        self._check_rendered()
+        self._check_child_static(child)
+        return super().add_child(index, child, position)
+
+
+    def add_child_top(self, child: ElementABC, position):
+        """
+        add a child element on top
+
+        note: adding the same element which its position may change might result in an unexpected behavior
+        """
+        self._check_rendered()
+        self._check_child_static(child)
+        return super().add_child_top(child, position)
+
+    def remove_child(self, child: Union[int, ElementABC, Subelement]):
+        self._check_rendered()
+        return super().remove_child(child)        
+
+    def remove_child_top(self):
+        self._check_rendered()
+        return super().remove_child_top()
+
+    def render(self, location, size=None):
+        self._rendered = True
+        return super().render(location, size=size)

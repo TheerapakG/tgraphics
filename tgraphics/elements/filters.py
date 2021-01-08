@@ -13,13 +13,7 @@ class Brightness(FilterABC):
     """
     def texture(self, size=None):
         orig_tex = self._target.texture(size)
-        _back = _current_backend()
-        _rdr = orig_tex.renderer
-        _tex = _back.Texture.create_as_target(_rdr, size if size else self.size, blend=orig_tex.blend_mode)
-        with _rdr.target(_tex):
-            orig_tex.draw((0, 0))
-            _current_backend().shapes.Rectangle((0, 0, 0, int(255*self.args[0]))).draw((0, 0), size if size else self.size)
-        return _tex
+        return orig_tex.as_color_mod((int(255*self.args[0]), int(255*self.args[0]), int(255*self.args[0]), 255))
 
 
 class Opacity(FilterABC):

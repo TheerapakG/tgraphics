@@ -319,7 +319,7 @@ class Texture:
         tex = Texture((renderer, _PygameClsSdlTexture(renderer._renderer, size, **_n_dict)))
 
         if blend:
-            tex._texture.blend_mode = blend
+            tex.blend_mode = blend
 
         return tex
 

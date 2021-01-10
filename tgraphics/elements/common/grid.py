@@ -389,6 +389,7 @@ class StaticGrid(Grid):
         super().__init__(size)
         self._static = True
         self._rendered = False
+        self._texture = None
 
     def _check_rendered(self):
         if self._rendered:
@@ -430,6 +431,16 @@ class StaticGrid(Grid):
         self._check_rendered()
         return super().remove_child_top()
 
+    def texture(self):
+        if not self._rendered:
+            self._rendered = True
+            _back = _current_backend()
+            _renderer = _back.current_renderer()
+            self._texture = _back.Texture.create(_renderer, self.size, _back.TextureAccessEnum.Target)
+            with _renderer.target(self._texture):
+                super().render((0, 0))
+                
+        return self._texture
+
     def render(self, location, size=None):
-        self._rendered = True
-        return super().render(location, size=size)
+        self.texture().draw(location, size=size)

@@ -61,7 +61,7 @@ class Renderer:
                         self._replacing = []
 
                     def __enter__(self):
-                        self._replacing.append(self._renderer._renderer.target)
+                        self._replacing.append(Texture((self._renderer, self._renderer._renderer.target)))
                         self._renderer.target = new_target
 
                     def __exit__(self, type, value, traceback):

@@ -3,7 +3,7 @@ from typing import NamedTuple, Optional, Union
 from pygame import Rect
 
 from ...core.backend_loader import _current_backend
-from ...core.elementABC import ElementABC
+from ...core.elementABC import DropNotSupportedError, ElementABC
 
 import sys
 assert sys.version_info[0] == 3
@@ -261,10 +261,17 @@ class Grid(ElementABC):
             n_off = match.offset
             sz = this.size
             child_pos = (n_off[0] + (sz[0]/2), n_off[1] + (sz[1]/2))
-            if self._try_dispatch('on_element_dropped', *child_pos, this, _dispatch_after=this) is not self._element_enter:
-                if self._element_enter:
+            try:
+                if self._try_dispatch('on_element_dropped', *child_pos, this, _dispatch_after=this) is not self._element_enter:
+                    if self._element_enter:
+                        self._element_enter.element.dispatch('on_element_leave', this)
+                self._element_enter = None
+            except DropNotSupportedError as e:
+                if self._element_enter and e.element is not self._element_enter:
                     self._element_enter.element.dispatch('on_element_leave', this)
-            self._element_enter = None
+                self._element_enter = None
+                raise e
+                
         return True
 
     def _on_child_this_undropped(self, this):

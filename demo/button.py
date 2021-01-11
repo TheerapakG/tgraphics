@@ -17,6 +17,11 @@ class DragableButton(tgraphics.mixin.DragableMixin, tgraphics.LabelButton):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        @self.event
+        def on_drop_unsupported(element):
+            print(self, 'dropped on element without dropping supported', element)
+            return True
+
 
 class DropSensor(tgraphics.Grid):
     def __init__(self, text):

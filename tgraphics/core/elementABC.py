@@ -3,10 +3,19 @@ from abc import ABC, abstractmethod
 from ..core.backend_loader import _current_backend
 from ._eventdispatch import EventDispatcher
 
+class DropNotSupportedError(Exception):
+    def __init__(self, element, *args: object) -> None:
+        self.element = element
+        super().__init__('element does not support dropping')
+
 class ElementABC(EventDispatcher, ABC):
     def __init__(self):
         super().__init__()
         self._static = False
+
+        @self.event
+        def on_element_dropped(x, y, element: 'ElementABC'):
+            raise DropNotSupportedError(self)
         
     @property
     @abstractmethod

@@ -18,6 +18,7 @@ class DragableMixin(ElementABC):
             if first and button == _current_backend().mouse.LEFT:
                 self._start_pos = self._pos
                 self._l_pos = self._pos
+                self.dispatch('on_this_start_dragged', this=self)
                 self.dispatch('on_this_dragged', this=self)
                 return True
             if not first and button != _current_backend().mouse.LEFT:
@@ -50,7 +51,8 @@ class DragableMixin(ElementABC):
             mouse = _current_backend().mouse
             if button == mouse.LEFT and self._l_pos:
                 try:
-                    self.dispatch('on_this_dropped', this=self)
+                    if not self.dispatch('on_this_dropped', this=self):
+                        self.dispatch('on_drop_on_empty')
                 except DropNotSupportedError as e:
                     self.dispatch('on_drop_unsupported', e.element)
                 self._start_pos = None

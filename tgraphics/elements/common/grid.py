@@ -8,9 +8,9 @@ from ...core.elementABC import DropNotSupportedError, ElementABC
 import sys
 assert sys.version_info[0] == 3
 if sys.version_info[1] < 9:
-    from typing import Iterator, List, Tuple
+    from typing import Callable, Iterator, List, Tuple
 else:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     List = list
     Tuple = tuple
 
@@ -64,7 +64,9 @@ class Grid(ElementABC):
             'on_position_changed': self._on_child_position_changed,
             'on_this_dropped': self._on_child_this_dropped,
             'on_this_undropped': self._on_child_this_undropped,
-            'on_this_dragged': self._on_child_this_dragged
+            'on_this_dragged': self._on_child_this_dragged,
+            'on_this_request_top': self._on_child_this_request_top,
+            'on_this_request_bottom': self._on_child_this_request_bottom,
         }
 
         @self.event
@@ -262,7 +264,10 @@ class Grid(ElementABC):
             sz = this.size
             child_pos = (n_off[0] + (sz[0]/2), n_off[1] + (sz[1]/2))
             try:
-                if self._try_dispatch('on_element_dropped', *child_pos, this, _dispatch_after=this) is not self._element_enter:
+                sub = self._try_dispatch('on_element_dropped', *child_pos, this, _dispatch_after=this)
+                if not sub:
+                    return False
+                if sub is not self._element_enter:
                     if self._element_enter:
                         self._element_enter.element.dispatch('on_element_leave', this)
                 self._element_enter = None
@@ -302,6 +307,16 @@ class Grid(ElementABC):
 
         return True
 
+    def _on_child_this_request_top(self, this, all=False):
+        self.move_child_top(this)
+        if all:
+            self.dispatch('on_this_request_top', self, all)
+
+    def _on_child_this_request_bottom(self, this, all=False):
+        self.move_child_bottom(this)
+        if all:
+            self.dispatch('on_this_request_bottom', self, all)
+
     def _add_listeners(self, child: ElementABC):
         for e, h in self._listener_dict.items():
             child.event[e].add_listener(h)
@@ -328,6 +343,17 @@ class Grid(ElementABC):
         self._add_listeners(child)
         self._sub.append(Subelement(child, position))
 
+    def pop_child_top(self) -> ElementABC:
+        return self._sub.pop().element
+
+    def pop_child_if(self, predicate: Callable[[ElementABC], bool]) -> Iterator[ElementABC]:
+        _idx = {i for i, sub in enumerate(self._sub) if predicate(sub.element)}
+        childs = [sub for i, sub in enumerate(self._sub) if i not in _idx]
+        self._sub = [sub for i, sub in enumerate(self._sub) if i not in _idx]
+        for child in childs:
+            self._remove_listeners(child.element)
+        return (sub.element for i, sub in enumerate(self._sub) if i in _idx)
+
     def remove_child(self, child: Union[int, ElementABC, Subelement]):
         if isinstance(child, Subelement):
             self._sub.remove(child)
@@ -335,18 +361,35 @@ class Grid(ElementABC):
             child = self._sub.pop(child)
         else:
             assert isinstance(child, ElementABC), 'unrecognized grid.remove_child child argument type'
-            # construction via comprehensions should be the fastest way to do this in just Python
-            _idx = {i for i, sub in enumerate(self._sub) if sub.element is child}
-            childs = [sub for i, sub in enumerate(self._sub) if i not in _idx]
-            self._sub = [sub for i, sub in enumerate(self._sub) if i not in _idx]
-            for child in childs:
-                self._remove_listeners(child.element)
+            self.pop_child_if(lambda c: c is child)
             return
         
         self._remove_listeners(child.element)
 
-    def remove_child_top(self):
-        self._sub.pop()
+    def clear(self):
+        self._sub.clear()
+
+    def move_child_top(self, child: Union[int, ElementABC, Subelement]):
+        if isinstance(child, Subelement):
+            child = self._sub.index(child)
+
+        if isinstance(child, int):
+            self._sub.append(self._sub.pop(child))
+        else:
+            assert isinstance(child, ElementABC), 'unrecognized grid.move_child_top child argument type'
+            _idx = {i for i, sub in enumerate(self._sub) if sub.element is child}
+            self._sub = [*(sub for i, sub in enumerate(self._sub) if i not in _idx), *(sub for i, sub in enumerate(self._sub) if i in _idx)]
+
+    def move_child_bottom(self, child: Union[int, ElementABC, Subelement]):
+        if isinstance(child, Subelement):
+            child = self._sub.index(child)
+
+        if isinstance(child, int):
+            self._sub.insert(0, self._sub.pop(child))
+        else:
+            assert isinstance(child, ElementABC), 'unrecognized grid.move_child_top child argument type'
+            _idx = {i for i, sub in enumerate(self._sub) if sub.element is child}
+            self._sub = [*(sub for i, sub in enumerate(self._sub) if i in _idx), *(sub for i, sub in enumerate(self._sub) if i not in _idx)]
 
     def _bound(self):
         all_loc = [Rect(pos, c.size) for c, pos in self._sub]
@@ -434,9 +477,17 @@ class StaticGrid(Grid):
         self._check_rendered()
         return super().remove_child(child)        
 
-    def remove_child_top(self):
+    def pop_child_top(self):
         self._check_rendered()
-        return super().remove_child_top()
+        return super().pop_child_top()
+
+    def pop_child_if(self, predicate):
+        self._check_rendered()
+        return super().pop_child_if(predicate)
+
+    def clear(self):
+        self._check_rendered()
+        return super().clear()
 
     def texture(self):
         if not self._rendered:

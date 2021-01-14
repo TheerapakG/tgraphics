@@ -84,5 +84,5 @@ class EventDispatcher:
             if self._t:
                 return self._t.dispatch(event, *args, **kwargs) or res
             else:
-                return True
+                return res if self._listeners[event] else True
                 # TODO: log?       

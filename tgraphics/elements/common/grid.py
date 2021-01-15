@@ -177,7 +177,7 @@ class Grid(ElementABC):
                         return True
                 
                 if self._mouse_enter:
-                    self._mouse_enter.dispatch('on_mouse_leave')
+                    self._mouse_enter.element.dispatch('on_mouse_leave')
                     self._mouse_enter = None
 
                 if not found:
@@ -343,16 +343,24 @@ class Grid(ElementABC):
         self._add_listeners(child)
         self._sub.append(Subelement(child, position))
 
-    def pop_child_top(self) -> ElementABC:
-        return self._sub.pop().element
+    def pop_child_top_sub(self) -> Subelement:
+        sub = self._sub.pop()
+        self._remove_listeners(sub.element)
+        return sub
 
-    def pop_child_if(self, predicate: Callable[[ElementABC], bool]) -> Iterator[ElementABC]:
+    def pop_child_top(self) -> ElementABC:
+        return self.pop_child_top_sub().element
+
+    def pop_child_if_sub(self, predicate: Callable[[ElementABC], bool]) -> List[Subelement]:
         _idx = {i for i, sub in enumerate(self._sub) if predicate(sub.element)}
-        childs = [sub for i, sub in enumerate(self._sub) if i not in _idx]
+        childs = [sub for i, sub in enumerate(self._sub) if i in _idx]
         self._sub = [sub for i, sub in enumerate(self._sub) if i not in _idx]
         for child in childs:
             self._remove_listeners(child.element)
-        return (sub.element for i, sub in enumerate(self._sub) if i in _idx)
+        return childs
+
+    def pop_child_if(self, predicate: Callable[[ElementABC], bool]) -> List[ElementABC]:
+        return (sub.element for sub in self.pop_child_if_sub(predicate))
 
     def remove_child(self, child: Union[int, ElementABC, Subelement]):
         if isinstance(child, Subelement):
@@ -477,13 +485,13 @@ class StaticGrid(Grid):
         self._check_rendered()
         return super().remove_child(child)        
 
-    def pop_child_top(self):
+    def pop_child_top_sub(self):
         self._check_rendered()
-        return super().pop_child_top()
+        return super().pop_child_top_sub()
 
-    def pop_child_if(self, predicate):
+    def pop_child_if_sub(self, predicate):
         self._check_rendered()
-        return super().pop_child_if(predicate)
+        return super().pop_child_if_sub(predicate)
 
     def clear(self):
         self._check_rendered()

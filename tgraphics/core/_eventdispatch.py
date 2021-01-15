@@ -1,6 +1,14 @@
 from collections import defaultdict
 from functools import partial
 
+class ListenerNotExistError(Exception):
+    def __init__(self, event, listener, element) -> None:
+        super().__init__('listener {} for event `{}` does not exist in {}'.format(listener, event, element))
+        self.listener = listener
+        self.event = event
+        self.element = element
+
+
 class _DispatcherHelper:
     def __init__(self, dispatcher):
         self._d = dispatcher
@@ -40,7 +48,10 @@ class _DispatcherHelper:
                 self._dh._d._listeners[self._n].append(listener)
 
             def remove_listener(self, listener):
-                self._dh._d._listeners[self._n].remove(listener)
+                try:
+                    self._dh._d._listeners[self._n].remove(listener)
+                except ValueError:
+                    raise ListenerNotExistError(self._n, listener, self._dh._d) from None
 
         return _EventHelper(self, name)
 

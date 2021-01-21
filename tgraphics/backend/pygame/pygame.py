@@ -6,6 +6,7 @@ os.environ['PYGAME_FREETYPE'] = "1"
 import pygame
 
 from . import _mouse
+from .key import Keys
 from ._sdl2 import *
 from ...core._eventdispatch import EventDispatcher
 
@@ -539,9 +540,25 @@ def run():
                 _running = False
                 break
             elif event.type == pygame.KEYDOWN:
-                dispatch_event(window, 'on_key_press', event.key, event.mod)
+                try:
+                    key = Keys(event.key)
+                except ValueError:
+                    key = event.key
+                try:
+                    mod = Keys(event.mod)
+                except ValueError:
+                    mod = event.mod
+                dispatch_event(window, 'on_key_press', key, mod)
             elif event.type == pygame.KEYUP:
-                dispatch_event(window, 'on_key_release', event.key, event.mod)
+                try:
+                    key = Keys(event.key)
+                except ValueError:
+                    key = event.key
+                try:
+                    mod = Keys(event.mod)
+                except ValueError:
+                    mod = event.mod
+                dispatch_event(window, 'on_key_release', key, mod)
             elif event.type == pygame.MOUSEMOTION:
                 _mouses = _mouse._mouse_from_pygtpl(event.buttons)
                 if _mouses != _mouse.NButton:

@@ -1,13 +1,16 @@
-from pygame import key as _key
+from enum import IntEnum
+from pygame import locals
 
 _keys = dict()
 
-for k in dir(_key):
-    v = getattr(_key, k)
+for k in dir(locals):
+    v = getattr(locals, k)
     if k.startswith('K_'):
         k = k[2:]
     elif k.startswith('KMOD_'):
         k = k[1:]
+    else:
+        continue
 
     k.replace('KP', 'NUM')
 
@@ -41,3 +44,5 @@ for k in dir(_key):
         _keys[k] = v
 
 globals().update(_keys)
+
+Keys = IntEnum('Keys', _keys)

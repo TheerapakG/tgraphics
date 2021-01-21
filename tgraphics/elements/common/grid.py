@@ -53,6 +53,7 @@ class Grid(ElementABC):
         self._mouse_press = None
         self._element_target = None
         self._element_enter = None
+        self._mouse_pos = None
         # TODO: decorator and some metaclass shenanigans?
         self._listener_dict = {
             'on_position_changed': self._on_child_position_changed,
@@ -65,6 +66,7 @@ class Grid(ElementABC):
 
         @self.event
         def on_mouse_motion(x, y, dx, dy): # pylint: disable=unused-variable
+            self._mouse_pos = (x, y)
             found = False
             for sub, pos in self.elements_at(x, y, actual_loc=True):
                 if not found:
@@ -115,6 +117,7 @@ class Grid(ElementABC):
 
         @self.event
         def on_mouse_leave(): # pylint: disable=unused-variable
+            self._mouse_pos = None
             val = False
             if self._mouse_enter:
                 val = self._mouse_enter.element.dispatch('on_mouse_leave')
@@ -131,10 +134,12 @@ class Grid(ElementABC):
 
         @self.event
         def on_mouse_drag(x, y, dx, dy, buttons): # pylint: disable=unused-variable
+            self._mouse_pos = (x, y)
             return self._dispatch(self._mouse_press, 'on_mouse_drag', x, y, dx, dy, buttons)
 
         @self.event
         def on_mouse_press(x, y, button, mods, first): # pylint: disable=unused-variable
+            self._mouse_pos = (x, y)
             if self._mouse_press:
                 self._dispatch(self._mouse_press, 'on_mouse_press', x, y, button, mods, first=False)
                 return True
@@ -150,6 +155,7 @@ class Grid(ElementABC):
 
         @self.event
         def on_mouse_release(x, y, button, mods, last): # pylint: disable=unused-variable
+            self._mouse_pos = (x, y)
             if not self._mouse_press:
                 return False
 
@@ -199,10 +205,31 @@ class Grid(ElementABC):
 
         @self.event
         def on_mouse_scroll(x, y, dx, dy): # pylint: disable=unused-variable
+            self._mouse_pos = (x, y)
             if self._mouse_press:
                 self._dispatch(self._mouse_press, 'on_mouse_scroll', x, y, dx, dy)
                 return True
             if self._mouse_target and self._try_dispatch('on_mouse_scroll', x, y, dx, dy):
+                return True
+            
+            return False
+
+        @self.event
+        def on_key_press(key, mod): # pylint: disable=unused-variable
+            if self._mouse_press:
+                self._dispatch(self._mouse_press, 'on_key_press', key, mod)
+                return True
+            if self._mouse_pos and self._try_dispatch('on_key_press', *self._mouse_pos, key, mod, _forward_pos=False):
+                return True
+            
+            return False
+
+        @self.event
+        def on_key_release(key, mod): # pylint: disable=unused-variable
+            if self._mouse_press:
+                self._dispatch(self._mouse_press, 'on_key_release', key, mod)
+                return True
+            if self._mouse_pos and self._try_dispatch('on_key_release', *self._mouse_pos, key, mod, _forward_pos=False):
                 return True
             
             return False
@@ -237,10 +264,10 @@ class Grid(ElementABC):
         else:
             return False
 
-    def _try_dispatch(self, event, x, y, *args, _dispatch_after=None, _tries=None, **kwargs):
+    def _try_dispatch(self, event, x, y, *args, _dispatch_after=None, _tries=None, _forward_pos=True, **kwargs):
         tries = range(_tries) if _tries else itertools.count()
         for (sub, pos), _ in zip(self.elements_at(x, y, actual_loc=True, after=_dispatch_after), tries):
-            if sub.element.dispatch(event, *pos, *args, **kwargs):
+            if (sub.element.dispatch(event, *pos, *args, **kwargs) if _forward_pos else sub.element.dispatch(event, *args, **kwargs)):
                 return sub
 
         return None

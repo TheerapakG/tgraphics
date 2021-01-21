@@ -61,19 +61,22 @@ class DropSensor(tgraphics.Grid):
 
 add_element(DropSensor('maybe try dropping element here'))
 
-normal_button = tgraphics.LabelButton.with_margin("normal button", 64, 64, color=(0, 0, 0, 255))
-normal_button.event('on_button_press')(lambda: print('normal button pressed'))
+normal_button = (tgraphics.LabelButton.with_margin("normal button", 64, 64, color=(0, 0, 0, 255))
+    .event['on_button_press'](lambda: print('normal button pressed'))
+)
 
 add_element(normal_button)
 
-toggle_button = tgraphics.LabelButton.with_margin("toggle button", 64, 64, color=(0, 0, 0, 255), button_type=tgraphics.ButtonType.TOGGLE)
-toggle_button.event('on_button_on')(lambda: print('button toggled on'))
-toggle_button.event('on_button_off')(lambda: print('button toggled off'))
+toggle_button = (tgraphics.LabelButton.with_margin("toggle button", 64, 64, color=(0, 0, 0, 255), button_type=tgraphics.ButtonType.TOGGLE)
+    .event['on_button_on'](lambda: print('button toggled on'))
+    .event['on_button_off'](lambda: print('button toggled off'))
+)
 
 add_element(toggle_button)
 
-disable_button = tgraphics.LabelButton.with_margin("disabled button", 64, 64, color=(0, 0, 0, 255), button_type=tgraphics.ButtonType.DISABLE)
-disable_button.event('on_button_press')(lambda: print('disabled button pressed'))
+disable_button = (tgraphics.LabelButton.with_margin("disabled button", 64, 64, color=(0, 0, 0, 255), button_type=tgraphics.ButtonType.DISABLE)
+    .event['on_button_press'](lambda: print('disabled button pressed'))
+)
 
 add_element(disable_button)
 

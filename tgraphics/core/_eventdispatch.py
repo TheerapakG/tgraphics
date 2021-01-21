@@ -1,5 +1,8 @@
 from collections import defaultdict
 from functools import partial
+from typing import Generic, Optional, TypeVar
+
+DispatcherT = TypeVar('DispatcherT', bound='EventDispatcher')
 
 class ListenerNotExistError(Exception):
     def __init__(self, event, listener, element) -> None:
@@ -8,9 +11,43 @@ class ListenerNotExistError(Exception):
         self.event = event
         self.element = element
 
+class _EventHelper:
+    def __init__(self, dhelper: '_DispatcherHelper[DispatcherT]', name):
+        self._dh = dhelper
+        self._n = name
 
-class _DispatcherHelper:
-    def __init__(self, dispatcher):
+    def __call__(self, func):
+        """
+        add event handler via decorator
+        """
+        self._dh[self._n] = func
+        return self._dh._d
+
+    @property
+    def handler(self):
+        try:
+            return self._dh._d._handlers[self._n]
+        except KeyError:
+            return None
+
+    @handler.setter
+    def handler(self, func):
+        self(func)
+
+    def add_listener(self, listener):
+        self._dh._d._listeners[self._n].append(listener)
+        return self._dh._d
+
+    def remove_listener(self, listener):
+        try:
+            self._dh._d._listeners[self._n].remove(listener)
+            return self._dh._d
+        except ValueError:
+            raise ListenerNotExistError(self._n, listener, self._dh._d) from None
+
+
+class _DispatcherHelper(Generic[DispatcherT]):
+    def __init__(self, dispatcher: DispatcherT):
         self._d = dispatcher
 
     def __call__(self, func, *, name=None):
@@ -22,37 +59,9 @@ class _DispatcherHelper:
         self[name if name else func.__name__] = func
 
     def __getitem__(self, name):
-        class _EventHelper:
-            def __init__(self, dhelper, name):
-                self._dh = dhelper
-                self._n = name
-
-            def __call__(self, func):
-                """
-                add event handler via decorator
-                """
-                self._dh[self._n] = func
-
-            @property
-            def handler(self):
-                try:
-                    return self._dh._d._handlers[self._n]
-                except KeyError:
-                    return None
-
-            @handler.setter
-            def handler(self, func):
-                self(func)
-
-            def add_listener(self, listener):
-                self._dh._d._listeners[self._n].append(listener)
-
-            def remove_listener(self, listener):
-                try:
-                    self._dh._d._listeners[self._n].remove(listener)
-                except ValueError:
-                    raise ListenerNotExistError(self._n, listener, self._dh._d) from None
-
+        """
+        add event handler/listener with chaining support
+        """
         return _EventHelper(self, name)
 
     def __setitem__(self, name, func):
@@ -62,8 +71,10 @@ class _DispatcherHelper:
             del self._d._handlers[name]
 
 
-class EventDispatcher:
-    def __init__(self):
+class EventDispatcher(Generic[DispatcherT]):
+    _e_helper: _DispatcherHelper[DispatcherT]
+
+    def __init__(self: DispatcherT):
         self._t = None
         self._handlers = dict()
         self._listeners = defaultdict(list)

@@ -1,3 +1,4 @@
+from enum import auto, Enum
 import itertools
 from typing import NamedTuple, Optional, Union
 from pygame import Rect
@@ -5,14 +6,7 @@ from pygame import Rect
 from ...core.backend_loader import _current_backend
 from ...core.elementABC import DropNotSupportedError, ElementABC
 
-import sys
-assert sys.version_info[0] == 3
-if sys.version_info[1] < 9:
-    from typing import Callable, Iterator, List, Tuple
-else:
-    from collections.abc import Callable, Iterator
-    List = list
-    Tuple = tuple
+from ...utils.typehint import *
 
 class Subelement:
     element: ElementABC
@@ -497,16 +491,79 @@ class StaticGrid(Grid):
         self._check_rendered()
         return super().clear()
 
-    def texture(self):
+    def texture(self, size=None):
         if not self._rendered:
             self._rendered = True
             _back = _current_backend()
             _renderer = _back.current_renderer()
-            self._texture = _back.Texture.create(_renderer, self.size, _back.TextureAccessEnum.Target)
+            self._texture = _back.Texture.create(_renderer, size if size else self.size, _back.TextureAccessEnum.Target)
             with _renderer.target(self._texture):
-                super().render((0, 0))
+                super().render((0, 0), size=size)
                 
         return self._texture
 
     def render(self, location, size=None):
         self.texture().draw(location, size=size)
+
+class AlignMode(Enum):
+    LEFT = auto()
+    CENTER = auto()
+    RIGHT = auto()
+
+class StructuredMixin(mixin_with_typehint(Grid)):
+    _line: List[ElementABC]
+
+    def __init__(self, *args, x_dist=8, y_dist=8, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._align = AlignMode.LEFT
+        self._x_dist = x_dist
+        self._y_dist = y_dist
+        self._x = 0
+        self._y = 0
+        self._high_y = 0
+        self._line = list()
+        self._in_line = False
+
+    @property
+    def align_mode(self):
+        return self._align
+
+    @align_mode.setter
+    def align_mode(self, mode):
+        self._align = mode
+
+    def _push_line_to_grid(self):
+        pass
+
+    def commit(self, newline=True):
+        szs = [e.size for e in self._line]
+        if not self._in_line:
+            self._in_line = True
+            if self.align_mode == AlignMode.LEFT:
+                self._x = 0
+            else:
+                h_sz = sum(sz[0] for sz in szs) + (len(self._line)-1)*self._x_dist
+                if self.align_mode == AlignMode.CENTER:
+                    self._x = (self.size[0]-h_sz)/2
+                else: # self.align_mode == AlignMode.RIGHT
+                    self._x = self.size[0]-h_sz
+            
+        self._high_y = max(self._high_y, self._y+max(sz[1] for sz in szs))
+
+        for sz, e in zip(szs, self._line):
+            super().add_child_top(e, (self._x, self._y))
+            self._x += sz[0] + self._x_dist
+        
+        if newline:
+            self._y += self._high_y + self._y_dist
+            self._high_y = 0
+            self._in_line = False
+
+    def add_child_structured(self, *elements: ElementABC, commit=True, newline=True):
+        self._line.extend(elements)
+        if commit:
+            self.commit(newline=newline)
+
+    def current_line_height(self):
+        return max(self._high_y, max(e.size[0] for e in self._line))
+        

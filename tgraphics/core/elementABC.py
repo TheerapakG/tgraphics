@@ -1,7 +1,7 @@
 from abc import abstractmethod
 
 from ..core.backend_loader import _current_backend
-from ._eventdispatch import EventDispatcherABC
+from .eventdispatch import EventDispatcherABC, event_handler
 
 class DropNotSupportedError(Exception):
     def __init__(self, element, *args: object) -> None:
@@ -13,9 +13,9 @@ class ElementABC(EventDispatcherABC):
         super().__init__()
         self._static = False
 
-        @self.event
-        def on_element_dropped(x, y, element: 'ElementABC'):
-            raise DropNotSupportedError(self)
+    @event_handler
+    def on_element_dropped(self, x, y, element: 'ElementABC'):
+        raise DropNotSupportedError(self)
         
     @property
     @abstractmethod

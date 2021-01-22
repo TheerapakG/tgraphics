@@ -8,7 +8,7 @@ import pygame
 from . import _mouse
 from .key import Keys
 from ._sdl2 import *
-from ...core._eventdispatch import EventDispatcher
+from ...core.eventdispatch import EventDispatcher
 
 # pylint: disable=no-member
 import pygame._sdl2

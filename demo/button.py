@@ -17,10 +17,10 @@ class DragableButton(tgraphics.mixin.DragableMixin, tgraphics.LabelButton):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        @self.event
-        def on_drop_unsupported(element):
-            print(self, 'dropped on element without dropping supported', element)
-            return True
+    @tgraphics.event_handler
+    def on_drop_unsupported(self, element):
+        print(self, 'dropped on element without dropping supported', element)
+        return True
 
 
 class DropSensor(tgraphics.Grid):
@@ -33,21 +33,21 @@ class DropSensor(tgraphics.Grid):
         self.add_child_top(label, (32, 32))
         self._dark_rect = tgraphics.shapes.Rectangle(sz, color=(0, 0, 0, 255))
 
-        @self.event
-        def on_element_dropped(x, y, element):
-            self.dark(False)
-            print(element, 'dropped inside sensor at ({x}, {y})'.format(x=x, y=y))
-            return True
+    @tgraphics.event_handler
+    def on_element_dropped(self, x, y, element):
+        self.dark(False)
+        print(element, 'dropped inside sensor at ({x}, {y})'.format(x=x, y=y))
+        return True
 
-        @self.event
-        def on_element_enter(element):
-            self.dark(True)
-            return True
+    @tgraphics.event_handler
+    def on_element_enter(self, element):
+        self.dark(True)
+        return True
 
-        @self.event
-        def on_element_leave(element):
-            self.dark(False)
-            return True
+    @tgraphics.event_handler
+    def on_element_leave(self, element):
+        self.dark(False)
+        return True
 
     def dark(self, dark):
         if dark:

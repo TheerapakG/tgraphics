@@ -2,6 +2,7 @@ from enum import auto, Enum
 
 from ...core.backend_loader import _current_backend
 from ...core.elementABC import ElementABC
+from ...core.eventdispatch import event_handler
 from ..filters import Brightness, Opacity
 from ..shapes import Rectangle
 from ..text import Label
@@ -74,43 +75,43 @@ class Button(ElementABC):
         self._hovering = False
         self._clicking = False
 
-        @self.event
-        def on_mouse_enter(): # pylint: disable=unused-variable
-            self._hovering = True
-            return True
+    @event_handler
+    def on_mouse_enter(self): # pylint: disable=unused-variable
+        self._hovering = True
+        return True
 
-        @self.event
-        def on_mouse_leave(): # pylint: disable=unused-variable
-            self._hovering = False
-            return True
+    @event_handler
+    def on_mouse_leave(self): # pylint: disable=unused-variable
+        self._hovering = False
+        return True
 
-        @self.event
-        def on_mouse_press(x, y, button, mods, first): # pylint: disable=unused-variable
-            if button == _current_backend().mouse.MouseButton.LEFT:
-                self._clicking = True
-            return True
+    @event_handler
+    def on_mouse_press(self, x, y, button, mods, first): # pylint: disable=unused-variable
+        if button == _current_backend().mouse.MouseButton.LEFT:
+            self._clicking = True
+        return True
 
-        @self.event
-        def on_mouse_release(x, y, button, mods, last): # pylint: disable=unused-variable
-            if button == _current_backend().mouse.MouseButton.LEFT:
-                self._clicking = False                
-                if last:
-                    if self._type == ButtonType.DISABLE:
-                        return True
-                    if 0 > x or 0 > y or x > self._sz[0] or y > self._sz[1]:
-                        self._hovering = False
-                    elif self._type == ButtonType.TOGGLE:
-                        if self._state == ButtonState.OFF:
-                            self._state = ButtonState.ON
-                            self.dispatch('on_button_on')
-                        else:
-                            self._state = ButtonState.OFF
-                            self.dispatch('on_button_off')
+    @event_handler
+    def on_mouse_release(self, x, y, button, mods, last): # pylint: disable=unused-variable
+        if button == _current_backend().mouse.MouseButton.LEFT:
+            self._clicking = False                
+            if last:
+                if self._type == ButtonType.DISABLE:
+                    return True
+                if 0 > x or 0 > y or x > self._sz[0] or y > self._sz[1]:
+                    self._hovering = False
+                elif self._type == ButtonType.TOGGLE:
+                    if self._state == ButtonState.OFF:
+                        self._state = ButtonState.ON
+                        self.dispatch('on_button_on')
                     else:
-                        self.dispatch('on_button_press')
-            elif last:
-                self._clicking = False 
-            return True
+                        self._state = ButtonState.OFF
+                        self.dispatch('on_button_off')
+                else:
+                    self.dispatch('on_button_press')
+        elif last:
+            self._clicking = False 
+        return True
 
     @property
     def size(self):

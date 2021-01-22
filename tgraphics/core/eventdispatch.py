@@ -1,5 +1,7 @@
 from abc import ABCMeta
 from collections import defaultdict
+from functools import partial
+from types import MethodType
 
 from ..utils.typehint import *
 
@@ -9,6 +11,21 @@ class ListenerNotExistError(Exception):
         self.listener = listener
         self.event = event
         self.element = element
+
+
+class EventHandler:
+    def __init__(self, event, func) -> None:
+        self.event = event
+        self.func = func
+
+
+def event_handler(func, *, name=None):
+    """
+    add event handler via decorator relying on the metaclass
+    """
+    if isinstance(func, str):
+        return partial(event_handler, name=func)
+    return EventHandler(name if name else func.__name__, func)
 
 
 class EventLookupHelper:
@@ -35,9 +52,9 @@ class EventLookupHelper:
         return EventInstanceProxy(self, anchor)
 
     def dispatch_from_anchor(self, anchor, event, *args, **kwargs):
+        found = False
         res = False
         for cls in anchor.__mro__:
-            found = False
             if self._listeners[cls][event]:
                 res = any([f(*args, **kwargs) for f in self._listeners[cls][event]]) or res
             if self._handlers[cls][event]:
@@ -110,15 +127,40 @@ class EventTypeProxy:
             raise ListenerNotExistError(self._name, listener, proxy._lookup._obj) from None
 
 
+class HandlersDescriptor:
+    def __init__(self, cls) -> None:
+        self.cls = cls
+        
+    def __get__(self, obj, cls):
+        return obj._handlers(self.cls)
+
+
+class EventDescriptor:
+    def __init__(self, cls) -> None:
+        self.cls = cls
+
+    def __get__(self, obj, cls):
+        return obj._event(self.cls)
+
+
+class DispatchDescriptor:
+    def __init__(self, cls) -> None:
+        self.cls = cls
+        
+    def __get__(self, obj, cls):
+        return partial(obj._dispatch, self.cls)
+
+
 class EventDispatcherMetaMixin:
     """
     metaclass to make .event of EventDispatcher works with super()
     """
-    def __new__(cls, clsname, bases, attrs):
-        attrs['handlers'] = property(lambda self: self._handlers(type(self)))
-        attrs['event'] = property(lambda self: self._event(type(self)))
-        attrs['dispatch'] = lambda self, event, *args, **kwargs: self._dispatch(type(self), event, *args, **kwargs)
-        return super(EventDispatcherMetaMixin, cls).__new__(cls, clsname, bases, attrs)
+    def __init__(self, name, bases, attrs):
+        super().__init__(name, bases, attrs)
+        self._instantiated_handlers = [e for e in attrs.values() if isinstance(e, EventHandler)]
+        self.handlers = HandlersDescriptor(self)
+        self.event = EventDescriptor(self)
+        self.dispatch = DispatchDescriptor(self)
 
     @classmethod
     def composite_with(cls, other_cls):
@@ -129,11 +171,19 @@ class EventDispatcherMetaMixin:
             @classmethod
             def get_base(this_cls):
                 class EventDispatcherCompositeBase(metaclass=this_cls):
+                    handlers: Set[str]
                     event: EventInstanceProxy
                     dispatch: Callable[..., bool]
 
+                    _instantiated_handlers: List[EventHandler]
+
                     def __init__(self):
                         self._lookup_helper = EventLookupHelper(self)
+                        for cls in type(self).__mro__:
+                            _handlers = getattr(cls, '_instantiated_handlers', None)
+                            if _handlers:
+                                for e in _handlers:
+                                    self._event(cls)[e.event](MethodType(e.func, self))
 
                     @property
                     def target(self):
@@ -143,7 +193,7 @@ class EventDispatcherMetaMixin:
                     def target(self, target):
                         self._lookup_helper.target = target
 
-                    def _handlers(self, anchor):
+                    def _handlers(self, anchor) -> Set[str]:
                         return self._lookup_helper.handlers_from_anchor(anchor)
 
                     def _event(self, anchor) -> EventInstanceProxy:

@@ -1,14 +1,14 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 from ..core.backend_loader import _current_backend
-from ._eventdispatch import EventDispatcher
+from ._eventdispatch import EventDispatcherABC
 
 class DropNotSupportedError(Exception):
     def __init__(self, element, *args: object) -> None:
         self.element = element
         super().__init__('element does not support dropping')
 
-class ElementABC(EventDispatcher, ABC):
+class ElementABC(EventDispatcherABC):
     def __init__(self):
         super().__init__()
         self._static = False

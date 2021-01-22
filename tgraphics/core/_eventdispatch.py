@@ -1,8 +1,7 @@
+from abc import ABCMeta
 from collections import defaultdict
-from functools import partial
-from typing import Generic, Optional, TypeVar
 
-DispatcherT = TypeVar('DispatcherT', bound='EventDispatcher')
+from ..utils.typehint import *
 
 class ListenerNotExistError(Exception):
     def __init__(self, event, listener, element) -> None:
@@ -11,100 +10,155 @@ class ListenerNotExistError(Exception):
         self.event = event
         self.element = element
 
-class _EventHelper:
-    def __init__(self, dhelper: '_DispatcherHelper[DispatcherT]', name):
-        self._dh = dhelper
-        self._n = name
 
-    def __call__(self, func):
-        """
-        add event handler via decorator
-        """
-        self._dh[self._n] = func
-        return self._dh._d
+class EventLookupHelper:
+    def __init__(self, dispatcher):
+        self._obj = dispatcher
+        self._handlers = defaultdict(lambda: defaultdict(lambda: None))
+        self._listeners = defaultdict(lambda: defaultdict(list))
+        self._target = None
 
     @property
-    def handler(self):
-        try:
-            return self._dh._d._handlers[self._n]
-        except KeyError:
-            return None
+    def target(self):
+        return self._target
 
-    @handler.setter
-    def handler(self, func):
-        self(func)
+    @target.setter
+    def target(self, target):
+        self._target = target
 
-    def add_listener(self, listener):
-        self._dh._d._listeners[self._n].append(listener)
-        return self._dh._d
+    def handlers_from_anchor(self, anchor):
+        _h = self._target.handlers if self._target is not None else set()
+        e_f_pair = ((e, f) for cls in anchor.__mro__ for e, f in self._handlers[cls].items())
+        return _h | {e for e, f in e_f_pair if f} | {e for e, ls in self._listeners.items() if ls}
 
-    def remove_listener(self, listener):
-        try:
-            self._dh._d._listeners[self._n].remove(listener)
-            return self._dh._d
-        except ValueError:
-            raise ListenerNotExistError(self._n, listener, self._dh._d) from None
+    def proxy_from_anchor(self, anchor):
+        return EventInstanceProxy(self, anchor)
 
+    def dispatch_from_anchor(self, anchor, event, *args, **kwargs):
+        res = False
+        for cls in anchor.__mro__:
+            found = False
+            if self._listeners[cls][event]:
+                res = any([f(*args, **kwargs) for f in self._listeners[cls][event]]) or res
+            if self._handlers[cls][event]:
+                found = True
+                res = self._handlers[cls][event](*args, **kwargs) or res
+            if found:
+                return res
 
-class _DispatcherHelper(Generic[DispatcherT]):
-    def __init__(self, dispatcher: DispatcherT):
-        self._d = dispatcher
+        if self._target:
+            return self._target.dispatch(event, *args, **kwargs) or res
+            
+        return True
+
+class EventInstanceProxy:
+    def __init__(self, lookup: EventLookupHelper, anchor):
+        self._lookup = lookup
+        self._anchor = anchor
 
     def __call__(self, func, *, name=None):
         """
         add event handler via decorator
         """
         if isinstance(func, str):
-            return partial(self.__call__, name=func)
+            return EventTypeProxy(self, func)
         self[name if name else func.__name__] = func
 
     def __getitem__(self, name):
         """
         add event handler/listener with chaining support
         """
-        return _EventHelper(self, name)
+        return EventTypeProxy(self, name)
 
     def __setitem__(self, name, func):
-        if func is not None:
-            self._d._handlers[name] = func
-        else:
-            del self._d._handlers[name]
+        EventTypeProxy(self, name).handler = func
 
 
-class EventDispatcher(Generic[DispatcherT]):
-    _e_helper: _DispatcherHelper[DispatcherT]
+class EventTypeProxy:
+    def __init__(self, instance_proxy: EventInstanceProxy, name):
+        self._instance_proxy = instance_proxy
+        self._name = name
 
-    def __init__(self: DispatcherT):
-        self._t = None
-        self._handlers = dict()
-        self._listeners = defaultdict(list)
-        self._e_helper = _DispatcherHelper(self)
-
-    @property
-    def target(self):
-        return self._t
-
-    @target.setter
-    def target(self, target):
-        self._t = target
+    def __call__(self, func):
+        """
+        add event handler
+        """
+        proxy = self._instance_proxy
+        proxy._lookup._handlers[proxy._anchor][self._name] = func
+        return proxy._lookup._obj
 
     @property
-    def event(self):
-        return self._e_helper
+    def handler(self):
+        proxy = self._instance_proxy
+        return proxy._lookup._handlers[proxy._anchor][self._name]
 
-    @property
-    def handlers(self):
-        _h = self._t.handlers if self._t is not None else set()
-        return _h | set(self._handlers.keys()) | {e for e, ls in self._listeners.items() if ls}
-            
-    def dispatch(self, event, *args, **kwargs):
-        # comprehension is often faster
-        res = any([ls(*args, **kwargs) for ls in self._listeners[event]])
+    @handler.setter
+    def handler(self, func):
+        self(func)
+
+    def add_listener(self, listener):
+        proxy = self._instance_proxy
+        proxy._lookup._listeners[proxy._anchor][self._name].append(listener)
+        return proxy._lookup._obj
+
+    def remove_listener(self, listener):
+        proxy = self._instance_proxy
         try:
-            return self._handlers[event](*args, **kwargs) or res
-        except KeyError:
-            if self._t:
-                return self._t.dispatch(event, *args, **kwargs) or res
-            else:
-                return res if self._listeners[event] else True
-                # TODO: log?       
+            proxy._lookup._listeners[proxy._anchor][self._name].remove(listener)
+            return proxy._lookup._obj
+        except ValueError:
+            raise ListenerNotExistError(self._name, listener, proxy._lookup._obj) from None
+
+
+class EventDispatcherMetaMixin:
+    """
+    metaclass to make .event of EventDispatcher works with super()
+    """
+    def __new__(cls, clsname, bases, attrs):
+        attrs['handlers'] = property(lambda self: self._handlers(type(self)))
+        attrs['event'] = property(lambda self: self._event(type(self)))
+        attrs['dispatch'] = lambda self, event, *args, **kwargs: self._dispatch(type(self), event, *args, **kwargs)
+        return super(EventDispatcherMetaMixin, cls).__new__(cls, clsname, bases, attrs)
+
+    @classmethod
+    def composite_with(cls, other_cls):
+        class EventDispatcherCompositeMeta(cls, other_cls):
+            def __new__(this_cls, clsname, bases, attrs):
+                return super(EventDispatcherCompositeMeta, this_cls).__new__(this_cls, clsname, bases, attrs)
+
+            @classmethod
+            def get_base(this_cls):
+                class EventDispatcherCompositeBase(metaclass=this_cls):
+                    event: EventInstanceProxy
+                    dispatch: Callable[..., bool]
+
+                    def __init__(self):
+                        self._lookup_helper = EventLookupHelper(self)
+
+                    @property
+                    def target(self):
+                        return self._lookup_helper.target
+
+                    @target.setter
+                    def target(self, target):
+                        self._lookup_helper.target = target
+
+                    def _handlers(self, anchor):
+                        return self._lookup_helper.handlers_from_anchor(anchor)
+
+                    def _event(self, anchor) -> EventInstanceProxy:
+                        return self._lookup_helper.proxy_from_anchor(anchor)
+
+                    def _dispatch(self, anchor, event, *args, **kwargs) -> bool:
+                        return self._lookup_helper.dispatch_from_anchor(anchor, event, *args, **kwargs)
+
+                return EventDispatcherCompositeBase
+
+        return EventDispatcherCompositeMeta
+
+
+EventDispatcherMeta = EventDispatcherMetaMixin.composite_with(type)
+EventDispatcherABCMeta = EventDispatcherMetaMixin.composite_with(ABCMeta)
+
+EventDispatcher = EventDispatcherMeta.get_base()
+EventDispatcherABC = EventDispatcherABCMeta.get_base()

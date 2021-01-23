@@ -287,17 +287,18 @@ class Grid(ElementABC):
             child_pos = (n_off[0] + (sz[0]/2), n_off[1] + (sz[1]/2))
             try:
                 sub = self._try_dispatch('on_element_dropped', *child_pos, this, _dispatch_after=this)
+            except DropNotSupportedError as e:
+                if self._element_enter and e.element is not self._element_enter:
+                    self._element_enter.element.dispatch('on_element_leave', this)
+                self._element_enter = None
+                raise e
+            else:
                 if not sub:
                     return False
                 if sub is not self._element_enter:
                     if self._element_enter:
                         self._element_enter.element.dispatch('on_element_leave', this)
                 self._element_enter = None
-            except DropNotSupportedError as e:
-                if self._element_enter and e.element is not self._element_enter:
-                    self._element_enter.element.dispatch('on_element_leave', this)
-                self._element_enter = None
-                raise e
                 
         return True
 
@@ -560,9 +561,6 @@ class StructuredMixin(mixin_with_typehint(Grid)):
     def align_mode(self, mode):
         self._align = mode
 
-    def _push_line_to_grid(self):
-        pass
-
     def commit(self, newline=True):
         szs = [e.size for e in self._line]
         if not self._in_line:
@@ -576,11 +574,13 @@ class StructuredMixin(mixin_with_typehint(Grid)):
                 else: # self.align_mode == AlignMode.RIGHT
                     self._x = self.size[0]-h_sz
             
-        self._high_y = max(self._high_y, self._y+max(sz[1] for sz in szs))
+        self._high_y = max(self._high_y, max(sz[1] for sz in szs))
 
         for sz, e in zip(szs, self._line):
             super().add_child_top(e, (self._x, self._y))
             self._x += sz[0] + self._x_dist
+
+        self._line.clear()
         
         if newline:
             self._y += self._high_y + self._y_dist
@@ -591,7 +591,18 @@ class StructuredMixin(mixin_with_typehint(Grid)):
         self._line.extend(elements)
         if commit:
             self.commit(newline=newline)
+        if (not commit) and newline:
+            raise ValueError('newline requires committing')
 
     def current_line_height(self):
         return max(self._high_y, max(e.size[0] for e in self._line))
         
+
+class StructuredGrid(StructuredMixin, Grid):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+
+class StructuredStaticGrid(StructuredMixin, StaticGrid):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)

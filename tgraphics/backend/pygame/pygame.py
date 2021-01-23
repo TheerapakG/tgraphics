@@ -482,6 +482,8 @@ def _default_close(window: Window):
     if not _Windows:
         stop()
 
+# @TheerapakG: TODO: really support >1 windows
+
 _CurrentRenderer = None
 
 async def _default_draw_async(window: Window):

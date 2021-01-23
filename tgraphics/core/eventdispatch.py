@@ -4,6 +4,7 @@ from functools import partial
 from types import MethodType
 
 from ..utils.typehint import *
+from ..utils.asynchelper import *
 
 class ListenerNotExistError(Exception):
     def __init__(self, event, listener, element) -> None:
@@ -65,6 +66,23 @@ class EventLookupHelper:
 
         if self._target:
             return self._target.dispatch(event, *args, **kwargs) or res
+            
+        return True
+
+    async def dispatch_async_from_anchor(self, anchor, event, *args, **kwargs):
+        found = False
+        res = False
+        for cls in anchor.__mro__:
+            if self._listeners[cls][event]:
+                res = any([await invoke(f, *args, **kwargs) for f in self._listeners[cls][event]]) or res
+            if self._handlers[cls][event]:
+                found = True
+                res = (await invoke(self._handlers[cls][event], *args, **kwargs)) or res
+            if found:
+                return res
+
+        if self._target:
+            return (await self._target.dispatch_async(event, *args, **kwargs)) or res
             
         return True
 
@@ -151,6 +169,14 @@ class DispatchDescriptor:
         return partial(obj._dispatch, self.cls)
 
 
+class DispatchAsyncDescriptor:
+    def __init__(self, cls) -> None:
+        self.cls = cls
+        
+    def __get__(self, obj, cls):
+        return partial(obj._dispatch_async, self.cls)
+
+
 class EventDispatcherMetaMixin:
     """
     metaclass to make .event of EventDispatcher works with super()
@@ -161,6 +187,7 @@ class EventDispatcherMetaMixin:
         self.handlers = HandlersDescriptor(self)
         self.event = EventDescriptor(self)
         self.dispatch = DispatchDescriptor(self)
+        self.dispatch_async = DispatchAsyncDescriptor(self)
 
     @classmethod
     def composite_with(cls, other_cls):
@@ -201,6 +228,9 @@ class EventDispatcherMetaMixin:
 
                     def _dispatch(self, anchor, event, *args, **kwargs) -> bool:
                         return self._lookup_helper.dispatch_from_anchor(anchor, event, *args, **kwargs)
+
+                    async def _dispatch_async(self, anchor, event, *args, **kwargs):
+                        return await self._lookup_helper.dispatch_async_from_anchor(anchor, event, *args, **kwargs)
 
                 return EventDispatcherCompositeBase
 

@@ -1,3 +1,4 @@
+import asyncio
 from collections import defaultdict
 from enum import Enum, IntEnum
 import os
@@ -483,13 +484,13 @@ def _default_close(window: Window):
 
 _CurrentRenderer = None
 
-def _default_draw(window: Window):
+async def _default_draw_async(window: Window):
     global _CurrentRenderer
     renderer = window.renderer
     renderer.target = None
     renderer.clear()
     _CurrentRenderer = renderer
-    if window.dispatch('on_draw'):
+    if await window.dispatch('on_draw_async'):
         renderer.update()
 
 class InvalidRendererStateException(Exception):
@@ -503,32 +504,39 @@ def current_renderer() -> Renderer:
 
 _DEFAULT_EVENTHANDLERS = dict(
     on_close=_default_close,
-    _on_draw=_default_draw,
+    _on_draw_async=_default_draw_async,
 )
 
-def dispatch_event(window, event, *args, **kwargs):
+def dispatch_event(window, event, *args, _async=False, **kwargs):
     if event in window.handlers:
-        window.dispatch(event, *args, **kwargs)
+        if _async:
+            return window.dispatch_async(event, *args, **kwargs)
+        else:
+            return window.dispatch(event, *args, **kwargs)
     else:
         try:
             func = _DEFAULT_EVENTHANDLERS[event]
         except KeyError:
             return
 
-        func(window, *args, **kwargs)
+        return func(window, *args, **kwargs)
 
 _mouses = _mouse.NButton
 
-def run():
+async def _run_event():
     global _running
     global _mouses
-    if _running:
-        raise InvalidLoopStateException()
-    _running = True
+
     pygame.event.clear()
     _mouses = _mouse._mouse_from_pygtpl(pygame.mouse.get_pressed(5))
+
     while _running:
+        await asyncio.sleep(0)
         for event in pygame.event.get():
+            await asyncio.sleep(0)
+            if not _running:
+                return
+
             _window = getattr(event, 'window', None)
             if _window:
                 window = Window.get(_window)
@@ -538,7 +546,7 @@ def run():
             # TODO: LoOkUp FuNcTiOnS!?!
             if event.type == pygame.QUIT:
                 _running = False
-                break
+                return
             elif event.type == pygame.KEYDOWN:
                 try:
                     key = Keys(event.key)
@@ -609,6 +617,25 @@ def run():
                     dispatch_event(window, 'on_resize', -1, -1)
                 elif event.event == pygame.WINDOWEVENT_SHOWN:
                     dispatch_event(window, 'on_show', -1, -1)
-                
-        for window in _Windows:
-            dispatch_event(window, '_on_draw')
+
+async def _run_draw():
+    global _running
+    while _running:
+        await asyncio.sleep(0)
+        for window in _Windows.copy():
+            await asyncio.sleep(0)
+            if not _running:
+                return
+            if window not in _Windows:
+                continue
+            await dispatch_event(window, '_on_draw_async', _async=True)
+
+async def _run_all():
+    await asyncio.gather(_run_event(), _run_draw())
+
+def run():
+    global _running
+    if _running:
+        raise InvalidLoopStateException()
+    _running = True
+    asyncio.run(_run_all())

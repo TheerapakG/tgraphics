@@ -1,3 +1,4 @@
+import asyncio
 from functools import partial
 import datetime
 import time
@@ -111,6 +112,20 @@ class Window:
         self._window.dispatch('on_draw_finished')
         return True
 
+    async def _on_draw_async(self, element):
+        current_time = time.perf_counter()
+        if self._target_fps and self._current_frame_time:
+            target_time = datetime.timedelta(seconds=1) / self._target_fps
+            expect_time = datetime.timedelta(seconds=current_time - self._current_frame_time) + self._draw_time
+            await asyncio.sleep((target_time-expect_time).total_seconds())
+        element.render((0, 0))
+        self._last_frame_time, self._current_frame_time = self._current_frame_time, time.perf_counter()
+        self._draw_time = datetime.timedelta(seconds=self._current_frame_time - current_time)
+        if self._last_frame_time:
+            self._frame_delta = datetime.timedelta(seconds=self._current_frame_time - self._last_frame_time)
+        self._window.dispatch('on_draw_finished')
+        return True
+
     @property
     def frame_time(self):
         return self._frame_delta
@@ -136,9 +151,11 @@ class Window:
         _WindowsBoundedElement[self] = element
         if element:
             self._window.event('on_draw')(partial(self._on_draw, element))
+            self._window.event('on_draw_async')(partial(self._on_draw_async, element))
             self._window.target = element
         else:
             self._window.event('on_draw')(None)
+            self._window.event('on_draw_async')(None)
             self._window.target = None
 
     def event(self, func):

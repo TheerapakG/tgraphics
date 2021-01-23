@@ -292,13 +292,13 @@ class Grid(ElementABC):
                     self._element_enter.element.dispatch('on_element_leave', this)
                 self._element_enter = None
                 raise e
-            else:
-                if not sub:
-                    return False
-                if sub is not self._element_enter:
-                    if self._element_enter:
-                        self._element_enter.element.dispatch('on_element_leave', this)
-                self._element_enter = None
+            
+            if not sub:
+                return False
+            if sub is not self._element_enter:
+                if self._element_enter:
+                    self._element_enter.element.dispatch('on_element_leave', this)
+            self._element_enter = None
                 
         return True
 
@@ -542,13 +542,14 @@ class AlignMode(Enum):
 class StructuredMixin(mixin_with_typehint(Grid)):
     _line: List[ElementABC]
 
-    def __init__(self, *args, x_dist=8, y_dist=8, **kwargs) -> None:
+    def __init__(self, *args, x_off=0, y_off=0, x_dist=8, y_dist=8, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._align = AlignMode.LEFT
+        self._x_off = x_off
         self._x_dist = x_dist
         self._y_dist = y_dist
-        self._x = 0
-        self._y = 0
+        self._x = x_off
+        self._y = y_off
         self._high_y = 0
         self._line = list()
         self._in_line = False
@@ -561,18 +562,26 @@ class StructuredMixin(mixin_with_typehint(Grid)):
     def align_mode(self, mode):
         self._align = mode
 
+    @property
+    def insert_location(self):
+        """
+        return rough location where element will be inserted next
+        if called after new line is just inserted then x represents last line's x
+        """
+        return (self._x, self._y)
+
     def commit(self, newline=True):
         szs = [e.size for e in self._line]
         if not self._in_line:
             self._in_line = True
             if self.align_mode == AlignMode.LEFT:
-                self._x = 0
+                self._x = self._x_off
             else:
                 h_sz = sum(sz[0] for sz in szs) + (len(self._line)-1)*self._x_dist
                 if self.align_mode == AlignMode.CENTER:
                     self._x = (self.size[0]-h_sz)/2
                 else: # self.align_mode == AlignMode.RIGHT
-                    self._x = self.size[0]-h_sz
+                    self._x = self.size[0]-h_sz-self._x_off
             
         self._high_y = max(self._high_y, max(sz[1] for sz in szs))
 

@@ -305,6 +305,10 @@ class Surface:
     def from_io(io, ext_hint):
         return Surface._from_foreign(io, ext_hint)
 
+    @staticmethod
+    def from_str(string, size, format):
+        return Surface(pygame.image.fromstring(string, size, format))
+
 
 # reimplementation of SDL_TextureAccess enum as pygame does not expose it
 class TextureAccessEnum(Enum):
@@ -350,6 +354,10 @@ class Texture:
     @staticmethod
     def from_io(renderer: Renderer, io, ext_hint):
         return Texture.from_surface(renderer, Surface.from_io(io, ext_hint))
+
+    @staticmethod
+    def from_str(renderer: Renderer, string, size, format):
+        return Texture.from_surface(renderer, Surface.from_str(string, size, format))
 
     @property
     def w(self):
@@ -494,9 +502,10 @@ def _default_close(window: Window):
     if not _Windows:
         stop()
 
-# @TheerapakG: TODO: really support >1 windows
-
 _CurrentRenderer = None
+
+def _current_renderer():
+    return _CurrentRenderer
 
 async def _draw_async(window: Window):
     global _CurrentRenderer

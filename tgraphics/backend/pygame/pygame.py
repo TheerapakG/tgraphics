@@ -133,6 +133,10 @@ class Renderer:
     def fill_rect(self, rect):
         self._renderer.fill_rect(rect)
 
+_window_create_event = None
+_window_create = list()
+_window_destroy_event = None
+_window_destroy = list()
 
 class Window(EventDispatcher):
     def __init__(self, _pyg):
@@ -159,6 +163,9 @@ class Window(EventDispatcher):
         _WindowsMap[_window] = window
         _Windows.add(window)
         _CurrentRenderer = window._renderer
+        _window_create.append(window)
+        if _window_create_event:
+            _window_create_event.set()
         return window
     
     @staticmethod
@@ -182,6 +189,9 @@ class Window(EventDispatcher):
 
     def destroy(self):
         _Windows.remove(self)
+        _window_destroy.append(self)
+        if _window_destroy_event:
+            _window_destroy_event.set()
         self._window.destroy()
 
     @property
@@ -467,6 +477,8 @@ def stop():
     global _running
     if _running:
         _running = False
+        _window_create_event.set()
+        _window_destroy_event.set()
     else:
         raise InvalidLoopStateException()
 
@@ -486,14 +498,20 @@ def _default_close(window: Window):
 
 _CurrentRenderer = None
 
-async def _default_draw_async(window: Window):
+async def _draw_async(window: Window):
     global _CurrentRenderer
-    renderer = window.renderer
-    renderer.target = None
-    renderer.clear()
-    _CurrentRenderer = renderer
-    if await window.dispatch('on_draw_async'):
-        renderer.update()
+    while _running:
+        await asyncio.sleep(0)
+        if not _running:
+            return
+        if window not in _Windows:
+            continue
+        renderer = window.renderer
+        renderer.target = None
+        renderer.clear()
+        _CurrentRenderer = renderer
+        if await window.dispatch('on_draw_async'):
+            renderer.update()
 
 class InvalidRendererStateException(Exception):
     pass
@@ -506,7 +524,6 @@ def current_renderer() -> Renderer:
 
 _DEFAULT_EVENTHANDLERS = dict(
     on_close=_default_close,
-    _on_draw_async=_default_draw_async,
 )
 
 def dispatch_event(window, event, *args, _async=False, **kwargs):
@@ -542,6 +559,7 @@ async def _run_event():
             _window = getattr(event, 'window', None)
             if _window:
                 window = Window.get(_window)
+                _CurrentRenderer = window.renderer
             else:
                 window = None
 
@@ -620,20 +638,40 @@ async def _run_event():
                 elif event.event == pygame.WINDOWEVENT_SHOWN:
                     dispatch_event(window, 'on_show', -1, -1)
 
-async def _run_draw():
-    global _running
+_tasks_dict = dict()
+
+async def _run_window_create():
+    global _window_create
+    global _window_create_event
+    _window_create_event = asyncio.Event()
     while _running:
-        await asyncio.sleep(0)
-        for window in _Windows.copy():
-            await asyncio.sleep(0)
-            if not _running:
-                return
-            if window not in _Windows:
-                continue
-            await dispatch_event(window, '_on_draw_async', _async=True)
+        for window in _window_create:
+            _tasks_dict[window] = asyncio.create_task(_draw_async(window))
+        _window_create = list()
+        _window_create_event.clear()
+        await _window_create_event.wait()
+
+async def _run_window_destroy():
+    global _window_destroy
+    global _window_destroy_event
+    global _tasks_dict
+    _window_destroy_event = asyncio.Event()
+    while _running:
+        for window in _window_destroy:
+            await _tasks_dict[window]
+            del _tasks_dict[window]
+        _window_destroy = list()
+        _window_destroy_event.clear()
+        await _window_destroy_event.wait()
+    for window, task in _tasks_dict.items():
+        await task
+        if window not in _window_destroy:
+            _window_create.append(window)
+    _tasks_dict = dict()
+    _window_destroy = list()
 
 async def _run_all():
-    await asyncio.gather(_run_event(), _run_draw())
+    await asyncio.gather(_run_event(), _run_window_create(), _run_window_destroy())
 
 def run():
     global _running

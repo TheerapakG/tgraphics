@@ -204,13 +204,14 @@ class EventDispatcherMetaMixin:
 
                     _instantiated_handlers: List[EventHandler]
 
-                    def __init__(self):
+                    def __init__(self, *args, **kwargs):
                         self._lookup_helper = EventLookupHelper(self)
                         for cls in type(self).__mro__:
                             _handlers = getattr(cls, '_instantiated_handlers', None)
                             if _handlers:
                                 for e in _handlers:
                                     self._event(cls)[e.event](MethodType(e.func, self))
+                        super().__init__(*args, **kwargs)
 
                     @property
                     def target(self):

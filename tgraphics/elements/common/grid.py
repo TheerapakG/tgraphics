@@ -546,6 +546,7 @@ class StructuredMixin(mixin_with_typehint(Grid)):
         super().__init__(*args, **kwargs)
         self._align = AlignMode.LEFT
         self._x_off = x_off
+        self._y_off = y_off
         self._x_dist = x_dist
         self._y_dist = y_dist
         self._x = x_off
@@ -569,6 +570,17 @@ class StructuredMixin(mixin_with_typehint(Grid)):
         if called after new line is just inserted then x represents last line's x
         """
         return (self._x, self._y)
+
+    def clear(self) -> None:
+        try:
+            super().clear()
+        except Exception:
+            raise
+        self._x = self._x_off
+        self._y = self._y_off
+        self._high_y = 0
+        self._line = list()
+        self._in_line = False
 
     def commit(self, newline=True):
         szs = [e.size for e in self._line]

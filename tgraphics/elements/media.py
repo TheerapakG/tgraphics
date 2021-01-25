@@ -23,8 +23,9 @@ class Player(ElementABC):
         if texture:
             texture.draw(location, size)
 
-    @property
-    def texture(self):
+    def texture(self, size=None):
+        if size:
+            return self._player.texture.as_size(size)
         return self._player.texture
 
 # PEP562

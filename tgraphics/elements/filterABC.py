@@ -31,4 +31,4 @@ class FilterABC(ElementABC):
         if self._tex and not size:
             self._tex.draw(location)
         else:
-            self.texture(size).draw(location)
+            self.texture(size if size else self._sz).draw(location)

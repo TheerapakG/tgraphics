@@ -12,10 +12,12 @@ player = tgraphics.media.Player()
 os.chdir(Path(__file__).parent)
 player.append(tgraphics.media.Source.from_file('bad_apple.mp4'))
 
-window.target_element = player
 window.fps = 60
 
 player.play()
+player_size = player.size
+window.size = (player_size[0]*1.5, player_size[1]*1.5)
+window.target_element = tgraphics.filters.Scale(player, size=window.size)
 tgraphics.run()
 
 tgraphics.uninit()

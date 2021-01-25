@@ -29,3 +29,17 @@ class Opacity(FilterABC):
     def texture(self, size=None):
         orig_tex = self._target.texture(size)
         return orig_tex.as_color_mod((255, 255, 255, int(255*self.args[0])))
+
+
+class Scale(FilterABC):
+    """
+    Scale element
+    
+    parameters:
+        target
+            the element
+        args[0]
+            size
+    """
+    def texture(self, size=None):
+        return self._target.texture(size if size else self._sz)

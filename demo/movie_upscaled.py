@@ -10,14 +10,13 @@ window = tgraphics.Window.create()
 player = tgraphics.media.Player()
 
 os.chdir(Path(__file__).parent)
-player.append(tgraphics.media.Source.from_file('bad_apple_{}p.mp4'.format(input("resolution: "))))
+player.append(tgraphics.media.Source.from_file('bad_apple_480p.mp4'))
 
 window.fps = 60
 
 player.play()
 player_size = player.size
-print(player_size)
-window.size = player_size
+window.size = (player_size[0]*1.5, player_size[1]*1.5)
 window.target_element = tgraphics.filters.Scale(player, size=window.size)
 tgraphics.run()
 

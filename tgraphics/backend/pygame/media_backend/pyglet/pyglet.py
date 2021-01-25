@@ -1,12 +1,9 @@
-import datetime
-from types import MethodType
 import pyglet
 from pyglet.gl import *
 import os
 from pathlib import Path
 import sys
-import time
-from ..pygame import Texture, _current_renderer
+from ...pygame import Texture, _current_renderer
 
 # Windows shit
 if sys.platform.startswith('win'):
@@ -30,47 +27,9 @@ class Player:
         self._player = pyglet.media.Player()
 
         if PATCH_UPLOAD_TEXTURE:
+            from . import _player_patch
             self._image = None
-            # @TheerapakG: a hack to make update_texture store image in memory instead of
-            # uploading to the opengl driver
-            def update_texture(fself, dt=None):
-                """Manually update the texture from the current source.
-                This happens automatically, so you shouldn't need to call this method.
-                Args:
-                    dt (float): The time elapsed since the last call to
-                        ``update_texture``.
-                """
-                source = fself.source
-                time = fself.time
-
-                frame_rate = source.video_format.frame_rate
-                frame_duration = 1 / frame_rate
-                ts = source.get_next_video_timestamp()
-                # Allow up to frame_duration difference
-                while ts is not None and ts + frame_duration < time:
-                    source.get_next_video_frame()  # Discard frame
-                    ts = source.get_next_video_timestamp()
-
-                if ts is None:
-                    # No more video frames to show. End of video stream.
-
-                    pyglet.clock.schedule_once(fself._video_finished, 0)
-                    return
-
-                image = source.get_next_video_frame()
-                if image is not None:
-                    self._image = image
-
-                ts = source.get_next_video_timestamp()
-                if ts is None:
-                    delay = frame_duration
-                else:
-                    delay = ts - time
-
-                delay = max(0.0, delay)
-                pyglet.clock.schedule_once(fself.update_texture, delay)
-
-            self._player.update_texture = MethodType(update_texture, self._player)
+            _player_patch.patch(self, self._player)
 
     def play(self):
         self._player.play()

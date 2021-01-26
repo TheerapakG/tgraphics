@@ -15,7 +15,6 @@ player.append(tgraphics.media.Source.from_file('awesome_audio.mp3'))
 window.fps = 60
 
 player.play()
-window.target_element = player
 tgraphics.run()
 
 tgraphics.uninit()

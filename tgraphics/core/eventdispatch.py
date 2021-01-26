@@ -201,6 +201,7 @@ class EventDispatcherMetaMixin:
                     handlers: Set[str]
                     event: EventInstanceProxy
                     dispatch: Callable[..., bool]
+                    dispatch_async: Callable[..., Coroutine[None, None, bool]]
 
                     _instantiated_handlers: List[EventHandler]
 
@@ -230,7 +231,7 @@ class EventDispatcherMetaMixin:
                     def _dispatch(self, anchor, event, *args, **kwargs) -> bool:
                         return self._lookup_helper.dispatch_from_anchor(anchor, event, *args, **kwargs)
 
-                    async def _dispatch_async(self, anchor, event, *args, **kwargs):
+                    async def _dispatch_async(self, anchor, event, *args, **kwargs) -> bool:
                         return await self._lookup_helper.dispatch_async_from_anchor(anchor, event, *args, **kwargs)
 
                 return EventDispatcherCompositeBase

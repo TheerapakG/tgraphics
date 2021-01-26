@@ -6,9 +6,9 @@ from typing import Type, TYPE_CHECKING, TypeVar
 T = TypeVar('T')
 
 if sys.version_info[1] < 9:
-    from typing import Callable, Iterator, List, Set, Tuple
+    from typing import Callable, Coroutine, Iterator, List, Set, Tuple
 else:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Coroutine, Iterator
     List = list
     Set = set
     Tuple = tuple

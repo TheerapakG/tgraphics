@@ -523,7 +523,7 @@ async def _draw_async(window: Window):
         _CurrentRenderer = renderer
         for c in _PreRenderHooks:
             c()
-        if await window.dispatch('on_draw_async'):
+        if await window.dispatch_async('on_draw_async'):
             renderer.update()
 
 class InvalidRendererStateException(Exception):

@@ -507,6 +507,8 @@ _CurrentRenderer = None
 def _current_renderer():
     return _CurrentRenderer
 
+_PreRenderHooks = set()
+
 async def _draw_async(window: Window):
     global _CurrentRenderer
     while _running:
@@ -519,6 +521,8 @@ async def _draw_async(window: Window):
         renderer.target = None
         renderer.clear()
         _CurrentRenderer = renderer
+        for c in _PreRenderHooks:
+            c()
         if await window.dispatch('on_draw_async'):
             renderer.update()
 

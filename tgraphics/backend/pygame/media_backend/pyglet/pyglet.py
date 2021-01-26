@@ -24,12 +24,12 @@ PATCH_UPLOAD_TEXTURE = True
 
 class Player:
     def __init__(self):
-        self._player = pyglet.media.Player()
-
         if PATCH_UPLOAD_TEXTURE:
             from . import _player_patch
             self._image = None
-            _player_patch.patch(self, self._player)
+            self._player = _player_patch.PatchedPlayer(self)
+        else:
+            self._player = pyglet.media.Player()
 
     def play(self):
         self._player.play()
@@ -43,7 +43,6 @@ class Player:
 
     @property
     def texture(self):
-        pyglet.clock.tick()
         if PATCH_UPLOAD_TEXTURE:
             texture = self._image
         else:
@@ -69,4 +68,7 @@ class Source:
 
     @property
     def size(self):
-        return (self._source.video_format.width, self._source.video_format.height)
+        format = self._source.video_format
+        if format:
+            return (format.width, format.height)
+        return (0, 0)

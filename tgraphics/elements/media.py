@@ -24,9 +24,12 @@ class Player(ElementABC):
             texture.draw(location, size)
 
     def texture(self, size=None):
-        if size:
-            return self._player.texture.as_size(size)
-        return self._player.texture
+        texture = self._player.texture
+        if not texture:
+            return None
+        elif size:
+            return texture.as_size(size)
+        return texture
 
 # PEP562
 def __getattr__(name: str):

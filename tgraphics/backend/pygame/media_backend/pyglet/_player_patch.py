@@ -34,9 +34,26 @@
 # ----------------------------------------------------------------------------
 
 import pyglet
-from types import MethodType
 
-def patch(tgraphics_player, pyglet_player):
+from ._pyglet_clock_binder import pyglet_clock_binder
+
+class PatchedPlayer(pyglet.media.Player):
+    def __init__(self, tgraphics_player):
+        self._tplayer = tgraphics_player
+        super().__init__()
+
+    def play(self):
+        pyglet_clock_binder.add_player(self)
+        super().play()
+
+    def pause(self):
+        super().pause()
+        pyglet_clock_binder.remove_player(self)
+
+    def delete(self):
+        pyglet_clock_binder.remove_player(self)
+        super().delete()
+
     # @TheerapakG: a hack to make update_texture store image in memory instead of
     # uploading to the opengl driver
     def update_texture(self, dt=None):
@@ -65,7 +82,7 @@ def patch(tgraphics_player, pyglet_player):
 
         image = source.get_next_video_frame()
         if image is not None:
-            tgraphics_player._image = image
+            self._tplayer._image = image
 
         ts = source.get_next_video_timestamp()
         if ts is None:
@@ -75,6 +92,4 @@ def patch(tgraphics_player, pyglet_player):
 
         delay = max(0.0, delay)
         pyglet.clock.schedule_once(self.update_texture, delay)
-    
-    pyglet_player.update_texture = MethodType(update_texture, pyglet_player)
 

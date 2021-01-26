@@ -130,3 +130,6 @@ dmypy.json
 
 # Example vid (bad apple)
 *.mp4
+
+# Example audio
+*.mp3

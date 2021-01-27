@@ -512,11 +512,8 @@ _PreRenderHooks = set()
 async def _draw_async(window: Window):
     global _CurrentRenderer
     while _running:
-        await asyncio.sleep(0)
-        if not _running:
-            return
         if window not in _Windows:
-            continue
+            break
         renderer = window.renderer
         renderer.target = None
         renderer.clear()
@@ -525,6 +522,7 @@ async def _draw_async(window: Window):
             c()
         if await window.dispatch_async('on_draw_async'):
             renderer.update()
+        await asyncio.sleep(0)
 
 class InvalidRendererStateException(Exception):
     pass
@@ -539,12 +537,9 @@ _DEFAULT_EVENTHANDLERS = dict(
     on_close=_default_close,
 )
 
-def dispatch_event(window, event, *args, _async=False, **kwargs):
+def dispatch_event(window, event, *args, **kwargs):
     if event in window.handlers:
-        if _async:
-            return window.dispatch_async(event, *args, **kwargs)
-        else:
-            return window.dispatch(event, *args, **kwargs)
+        return window.dispatch(event, *args, **kwargs)
     else:
         try:
             func = _DEFAULT_EVENTHANDLERS[event]
@@ -565,7 +560,6 @@ async def _run_event():
     while _running:
         await asyncio.sleep(0)
         for event in pygame.event.get():
-            await asyncio.sleep(0)
             if not _running:
                 return
 

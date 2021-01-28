@@ -1,7 +1,9 @@
 import asyncio
 from collections import defaultdict
+import datetime
 from enum import Enum, IntEnum
 import os
+import time
 
 os.environ['PYGAME_FREETYPE'] = "1"
 import pygame
@@ -9,7 +11,8 @@ import pygame
 from . import _mouse
 from .key import Keys
 from ._sdl2 import *
-from ...core.eventdispatch import EventDispatcher
+from ...core.eventdispatch import EventDispatcher, event_handler
+from ...utils.typehint import *
 
 # pylint: disable=no-member
 import pygame._sdl2
@@ -28,8 +31,8 @@ class BlendMode(IntEnum):
     BLENDMODE_MOD = 0x00000004
     BLENDMODE_INVALID = 0x7FFFFFFF
 
-_WindowsMap = dict()
-_Windows = set()
+_WindowsMap = dict() # type: Dict[Any, Window]
+_Windows = set() # type: Set[Window]
 
 class Renderer:
     def __init__(self, _pyg):
@@ -46,6 +49,10 @@ class Renderer:
         if not isinstance(other, Renderer):
             return NotImplemented
         return self._window.id == other._window.id
+
+    @property
+    def window(self):
+        return self._window
 
     @property
     def target(self):
@@ -133,11 +140,6 @@ class Renderer:
     def fill_rect(self, rect):
         self._renderer.fill_rect(rect)
 
-_window_create_event = None
-_window_create = list()
-_window_destroy_event = None
-_window_destroy = list()
-
 class Window(EventDispatcher):
     def __init__(self, _pyg):
         super().__init__()
@@ -155,17 +157,38 @@ class Window(EventDispatcher):
                 self._renderer = Renderer((self, _PygameClsSdlRenderer(self._window, target_texture=True)))
             self._funcs = defaultdict(lambda: None)
 
+    @event_handler
+    def on_close(self):
+        self.destroy()
+        if not _Windows:
+            stop()
+
     @staticmethod
     def create(title, size, full_screen, resizable):
-        global _CurrentRenderer
         _window = _PygameClsSdlWindow(title, size, fullscreen=full_screen, resizable=resizable)
         window = Window(_window)
         _WindowsMap[_window] = window
         _Windows.add(window)
-        _CurrentRenderer = window._renderer
-        _window_create.append(window)
-        if _window_create_event:
-            _window_create_event.set()
+        
+        window._last_frame_time = None
+        window._current_start_time = None
+        window._current_frame_time = None
+        window._draw_time = datetime.timedelta()
+        window._frame_delta = None
+        window._target_fps = None
+
+        on_draw_finished_event = window.event['on_draw_finished']
+        @on_draw_finished_event.add_listener
+        def update_frame_metrics():
+            window._last_frame_time, window._current_frame_time = window._current_frame_time, time.perf_counter()
+            window._draw_time = datetime.timedelta(seconds=window._current_frame_time - window._current_start_time)
+            if window._last_frame_time:
+                window._frame_delta = datetime.timedelta(seconds=window._current_frame_time - window._last_frame_time)
+        
+        runner.current_renderer = window._renderer
+        if runner.running:
+            runner.tasks_set.add(asyncio.create_task(window.draw_schedule()))
+
         return window
     
     @staticmethod
@@ -188,10 +211,8 @@ class Window(EventDispatcher):
         return self._window.id == other._window.id
 
     def destroy(self):
+        self.dispatch('on_destroy')
         _Windows.remove(self)
-        _window_destroy.append(self)
-        if _window_destroy_event:
-            _window_destroy_event.set()
         self._window.destroy()
 
     @property
@@ -230,6 +251,46 @@ class Window(EventDispatcher):
     @property
     def renderer(self):
         return self._renderer
+
+    @property
+    def frame_time(self):
+        try:
+            return getattr(self, '_frame_delta')
+        except AttributeError:
+            return Window.get(self._window).frame_time
+
+    @property
+    def fps(self):
+        _frame_delta = self.frame_time
+        if _frame_delta is not None:
+            try:
+                return datetime.timedelta(seconds=1)/_frame_delta
+            except ZeroDivisionError:
+                return None
+
+    @fps.setter
+    def fps(self, fps):
+        if hasattr(self, '_target_fps'):
+            self._target_fps = fps
+        else:
+            Window.get(self._window).fps = fps
+
+    async def draw_schedule(self):
+        while runner.running:
+            if self not in _Windows:
+                break
+            renderer = self.renderer
+            renderer.target = None
+            renderer.clear()
+            self._current_start_time = time.perf_counter()
+            if self._target_fps and self._current_frame_time:
+                target_time = datetime.timedelta(seconds=1) / self._target_fps
+                expect_time = datetime.timedelta(seconds=self._current_start_time - self._current_frame_time) + self._draw_time
+                await asyncio.sleep((target_time-expect_time).total_seconds())
+            runner.current_renderer = renderer
+            self.dispatch('on_draw')
+            renderer.update()
+            await asyncio.sleep(0)
 
 
 class Surface:
@@ -475,214 +536,172 @@ def init():
     pygame.sysfont._parse_font_entry_win = _parse_font_entry_win
     pygame.init()
 
-# TODO: lock
-_running = False
-
 class InvalidLoopStateException(Exception):
     pass
 
-def stop():
-    global _running
-    if _running:
-        _running = False
-        _window_create_event.set()
-        _window_destroy_event.set()
-    else:
-        raise InvalidLoopStateException()
+class _Runner(EventDispatcher):
+    running = False
+    mouses = None
+    current_renderer = None
+    tasks_set = set()
 
-_cleanups = list()
+    _stop_event = None
+
+    def __init__(self):
+        pass
+    
+    def run(self):
+        if self.running:
+            raise InvalidLoopStateException()
+        self.running = True
+        asyncio.run(self.run_all())
+
+    def stop(self):
+        if self.running:
+            self.running = False
+            self._stop_event.set()
+        else:
+            raise InvalidLoopStateException()
+
+    async def run_event(self):
+        pygame.event.clear()
+        _mouse._mouse_from_pygtpl(pygame.mouse.get_pressed(5))
+
+        current_loop_time = None
+        loop_run_time = datetime.timedelta()
+
+        while self.running:
+            current_start_time = time.perf_counter()
+            if not current_loop_time or any(not w._target_fps for w in _Windows):
+                await asyncio.sleep(0)
+            else:
+                target_time = datetime.timedelta(seconds=1) / max(w._target_fps for w in _Windows)
+                expect_time = datetime.timedelta(seconds=current_start_time - current_loop_time) + loop_run_time
+                await asyncio.sleep((target_time-expect_time).total_seconds()/2)
+
+            for event in pygame.event.get():
+                if not self.running:
+                    return
+
+                _window = getattr(event, 'window', None)
+                if _window:
+                    window = Window.get(_window)
+                    self.current_renderer = window.renderer
+                else:
+                    window = None
+
+                # TODO: LoOkUp FuNcTiOnS!?!
+                if event.type == pygame.QUIT:
+                    _running = False
+                    return
+                elif event.type == pygame.KEYDOWN:
+                    try:
+                        key = Keys(event.key)
+                    except ValueError:
+                        key = event.key
+                    try:
+                        mod = Keys(event.mod)
+                    except ValueError:
+                        mod = event.mod
+                    window.dispatch('on_key_press', key, mod)
+                elif event.type == pygame.KEYUP:
+                    try:
+                        key = Keys(event.key)
+                    except ValueError:
+                        key = event.key
+                    try:
+                        mod = Keys(event.mod)
+                    except ValueError:
+                        mod = event.mod
+                    window.dispatch('on_key_release', key, mod)
+                elif event.type == pygame.MOUSEMOTION:
+                    self.mouses = _mouse._mouse_from_pygtpl(event.buttons)
+                    if self.mouses != _mouse.NButton:
+                        window.dispatch('on_mouse_drag', *event.pos, *event.rel, self.mouses)
+                    else:
+                        window.dispatch('on_mouse_motion', *event.pos, *event.rel)
+                elif event.type == pygame.MOUSEBUTTONUP:
+                    if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
+                        continue
+                    button = _mouse._mouse_from_pyg(event.button)
+                    self.mouses &= ~button
+                    last = False
+                    if self.mouses == _mouse.NButton:
+                        sdl_capturemouse(False)
+                        last = True
+                    window.dispatch('on_mouse_release', *event.pos, button, pygame.key.get_mods(), last=last)
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
+                        continue
+                    button = _mouse._mouse_from_pyg(event.button)
+                    first = False
+                    if self.mouses == _mouse.NButton:
+                        sdl_capturemouse(True)
+                        first = True
+                    self.mouses |= button
+                    window.dispatch('on_mouse_press', *event.pos, button, pygame.key.get_mods(), first=first)
+                elif event.type == pygame.MOUSEWHEEL:
+                    if event.flipped:
+                        dx = -event.x
+                        dy = -event.y
+                    else:
+                        dx = event.x
+                        dy = event.y
+
+                    window.dispatch('on_mouse_scroll', *pygame.mouse.get_pos(), dx, dy)
+                elif event.type == pygame.WINDOWEVENT:
+                    if event.event == pygame.WINDOWEVENT_CLOSE:
+                        window.dispatch('on_close')
+                    elif event.event == pygame.WINDOWEVENT_ENTER:
+                        window.dispatch('on_mouse_enter')
+                    elif event.event == pygame.WINDOWEVENT_LEAVE:
+                        window.dispatch('on_mouse_leave')
+                    elif event.event == pygame.WINDOWEVENT_HIDDEN:
+                        window.dispatch('on_hide')
+                    elif event.event == pygame.WINDOWEVENT_MOVED:
+                        window.dispatch('on_move', -1, -1)
+                    elif event.event == pygame.WINDOWEVENT_RESIZED:
+                        window.dispatch('on_resize', -1, -1)
+                    elif event.event == pygame.WINDOWEVENT_SHOWN:
+                        window.dispatch('on_show', -1, -1)
+            
+            current_loop_time = time.perf_counter()
+            loop_run_time = datetime.timedelta(seconds=current_loop_time - current_start_time)
+            
+            # TODO: if not in "hog cpu" context (another thing to do) then yield to other process
+            # until before next frame is needed, then we just await asyncio.sleep(0) at the start of this loop
+
+    async def run_all(self):
+        self._stop_event = asyncio.Event()
+
+        for window in _Windows:
+            self.tasks_set.add(asyncio.create_task(window.draw_schedule()))
+
+        self.tasks_set.add(asyncio.create_task(self.run_event()))
+
+        await self._stop_event.wait()
+        for event in self.tasks_set:
+            await event
+
+
+runner = _Runner()
+
+def run():
+    runner.run()
+
+def stop():
+    runner.stop()
 
 def uninit():
-    if _running:
-        raise InvalidLoopStateException()
-    pygame.quit()
-
-def _default_close(window: Window):
-    window.destroy()
-    if not _Windows:
+    if runner.running:
         stop()
-
-_CurrentRenderer = None
-
-def _current_renderer():
-    return _CurrentRenderer
-
-_PreRenderHooks = set()
-
-async def _draw_async(window: Window):
-    global _CurrentRenderer
-    while _running:
-        if window not in _Windows:
-            break
-        renderer = window.renderer
-        renderer.target = None
-        renderer.clear()
-        _CurrentRenderer = renderer
-        for c in _PreRenderHooks:
-            c()
-        if await window.dispatch_async('on_draw_async'):
-            renderer.update()
-        await asyncio.sleep(0)
+    pygame.quit()
 
 class InvalidRendererStateException(Exception):
     pass
 
 def current_renderer() -> Renderer:
-    if _CurrentRenderer:
-        return _CurrentRenderer
+    if runner.current_renderer:
+        return runner.current_renderer
     else:
         raise InvalidRendererStateException()
-
-_DEFAULT_EVENTHANDLERS = dict(
-    on_close=_default_close,
-)
-
-def dispatch_event(window, event, *args, **kwargs):
-    if event in window.handlers:
-        return window.dispatch(event, *args, **kwargs)
-    else:
-        try:
-            func = _DEFAULT_EVENTHANDLERS[event]
-        except KeyError:
-            return
-
-        return func(window, *args, **kwargs)
-
-_mouses = _mouse.NButton
-
-async def _run_event():
-    global _running
-    global _mouses
-
-    pygame.event.clear()
-    _mouses = _mouse._mouse_from_pygtpl(pygame.mouse.get_pressed(5))
-
-    while _running:
-        await asyncio.sleep(0)
-        for event in pygame.event.get():
-            if not _running:
-                return
-
-            _window = getattr(event, 'window', None)
-            if _window:
-                window = Window.get(_window)
-                _CurrentRenderer = window.renderer
-            else:
-                window = None
-
-            # TODO: LoOkUp FuNcTiOnS!?!
-            if event.type == pygame.QUIT:
-                _running = False
-                return
-            elif event.type == pygame.KEYDOWN:
-                try:
-                    key = Keys(event.key)
-                except ValueError:
-                    key = event.key
-                try:
-                    mod = Keys(event.mod)
-                except ValueError:
-                    mod = event.mod
-                dispatch_event(window, 'on_key_press', key, mod)
-            elif event.type == pygame.KEYUP:
-                try:
-                    key = Keys(event.key)
-                except ValueError:
-                    key = event.key
-                try:
-                    mod = Keys(event.mod)
-                except ValueError:
-                    mod = event.mod
-                dispatch_event(window, 'on_key_release', key, mod)
-            elif event.type == pygame.MOUSEMOTION:
-                _mouses = _mouse._mouse_from_pygtpl(event.buttons)
-                if _mouses != _mouse.NButton:
-                    dispatch_event(window, 'on_mouse_drag', *event.pos, *event.rel, _mouses)
-                else:
-                    dispatch_event(window, 'on_mouse_motion', *event.pos, *event.rel)
-            elif event.type == pygame.MOUSEBUTTONUP:
-                if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
-                    continue
-                button = _mouse._mouse_from_pyg(event.button)
-                _mouses &= ~button
-                last = False
-                if _mouses == _mouse.NButton:
-                    sdl_capturemouse(False)
-                    last = True
-                dispatch_event(window, 'on_mouse_release', *event.pos, button, pygame.key.get_mods(), last=last)
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
-                    continue
-                button = _mouse._mouse_from_pyg(event.button)
-                first = False
-                if _mouses == _mouse.NButton:
-                    sdl_capturemouse(True)
-                    first = True
-                _mouses |= button
-                dispatch_event(window, 'on_mouse_press', *event.pos, button, pygame.key.get_mods(), first=first)
-            elif event.type == pygame.MOUSEWHEEL:
-                if event.flipped:
-                    dx = -event.x
-                    dy = -event.y
-                else:
-                    dx = event.x
-                    dy = event.y
-
-                dispatch_event(window, 'on_mouse_scroll', *pygame.mouse.get_pos(), dx, dy)
-            elif event.type == pygame.WINDOWEVENT:
-                if event.event == pygame.WINDOWEVENT_CLOSE:
-                    dispatch_event(window, 'on_close')
-                elif event.event == pygame.WINDOWEVENT_ENTER:
-                    dispatch_event(window, 'on_mouse_enter')
-                elif event.event == pygame.WINDOWEVENT_LEAVE:
-                    dispatch_event(window, 'on_mouse_leave')
-                elif event.event == pygame.WINDOWEVENT_HIDDEN:
-                    dispatch_event(window, 'on_hide')
-                elif event.event == pygame.WINDOWEVENT_MOVED:
-                    dispatch_event(window, 'on_move', -1, -1)
-                elif event.event == pygame.WINDOWEVENT_RESIZED:
-                    dispatch_event(window, 'on_resize', -1, -1)
-                elif event.event == pygame.WINDOWEVENT_SHOWN:
-                    dispatch_event(window, 'on_show', -1, -1)
-
-_tasks_dict = dict()
-
-async def _run_window_create():
-    global _window_create
-    global _window_create_event
-    _window_create_event = asyncio.Event()
-    while _running:
-        for window in _window_create:
-            _tasks_dict[window] = asyncio.create_task(_draw_async(window))
-        _window_create = list()
-        _window_create_event.clear()
-        await _window_create_event.wait()
-
-async def _run_window_destroy():
-    global _window_destroy
-    global _window_destroy_event
-    global _tasks_dict
-    _window_destroy_event = asyncio.Event()
-    while _running:
-        for window in _window_destroy:
-            await _tasks_dict[window]
-            del _tasks_dict[window]
-        _window_destroy = list()
-        _window_destroy_event.clear()
-        await _window_destroy_event.wait()
-    for window, task in _tasks_dict.items():
-        await task
-        if window not in _window_destroy:
-            _window_create.append(window)
-    _tasks_dict = dict()
-    _window_destroy = list()
-
-async def _run_all():
-    await asyncio.gather(_run_event(), _run_window_create(), _run_window_destroy())
-
-def run():
-    global _running
-    if _running:
-        raise InvalidLoopStateException()
-    _running = True
-    asyncio.run(_run_all())

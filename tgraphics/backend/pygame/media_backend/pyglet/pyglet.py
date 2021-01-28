@@ -3,7 +3,8 @@ from pyglet.gl import *
 import os
 from pathlib import Path
 import sys
-from ...pygame import Texture, _current_renderer
+
+from ...pygame import Texture, current_renderer
 
 # Windows shit
 if sys.platform.startswith('win'):
@@ -20,19 +21,15 @@ if sys.platform.startswith('win'):
     if _fpath:
         ctypes.windll.kernel32.SetDllDirectoryW(str(_fpath))
 
-PATCH_UPLOAD_TEXTURE = True
+from . import _player_patch
 
 class Player:
     def __init__(self):
-        if PATCH_UPLOAD_TEXTURE:
-            from . import _player_patch
-            self._image = None
-            self._player = _player_patch.PatchedPlayer(self)
-        else:
-            self._player = pyglet.media.Player()
+        self._image = None
+        self._player = _player_patch.PatchedPlayer(self)
 
-    def play(self):
-        self._player.play()
+    def play(self, window):
+        self._player.play(window=window)
 
     def append(self, source):
         self._player.queue(source._source)
@@ -43,16 +40,11 @@ class Player:
 
     @property
     def texture(self):
-        if PATCH_UPLOAD_TEXTURE:
-            texture = self._image
-        else:
-            # Download from the driver (opengl), then upload to the driver (whatever SDL is using: 
-            # directx, vulkan or even opengl). Truly inefficient.
-            texture = self._player.texture
+        texture = self._image
         if not texture:
             return None
         img_data = texture.get_image_data().get_data('RGBA')
-        return Texture.from_str(_current_renderer(), bytes(img_data), (texture.width, texture.height), 'RGBA')
+        return Texture.from_str(current_renderer(), bytes(img_data), (texture.width, texture.height), 'RGBA')
 
 
 class Source:

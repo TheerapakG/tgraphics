@@ -1,14 +1,15 @@
 import sys
 assert sys.version_info[0] == 3
 
-from typing import Type, TYPE_CHECKING, TypeVar
+from typing import Any, Type, TYPE_CHECKING, TypeVar
 
 T = TypeVar('T')
 
 if sys.version_info[1] < 9:
-    from typing import Callable, Coroutine, Iterator, List, Set, Tuple
+    from typing import Callable, Coroutine, Dict, Iterator, List, Set, Tuple
 else:
     from collections.abc import Callable, Coroutine, Iterator
+    Dict = dict
     List = list
     Set = set
     Tuple = tuple

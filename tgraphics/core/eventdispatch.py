@@ -57,10 +57,10 @@ class EventLookupHelper:
         res = False
         for cls in anchor.__mro__:
             if self._listeners[cls][event]:
-                res = any([f(*args, **kwargs) for f in self._listeners[cls][event]]) or res
+                res = any([f(*args, **kwargs) for f in self._listeners[cls][event].copy()]) or res
             if self._handlers[cls][event]:
                 found = True
-                res = self._handlers[cls][event](*args, **kwargs) or res
+                res = self._handlers[cls][event](*args, **kwargs)
             if found:
                 return res
 
@@ -74,10 +74,10 @@ class EventLookupHelper:
         res = False
         for cls in anchor.__mro__:
             if self._listeners[cls][event]:
-                res = any([await invoke(f, *args, **kwargs) for f in self._listeners[cls][event]]) or res
+                res = any([await invoke(f, *args, **kwargs) for f in self._listeners[cls][event].copy()]) or res
             if self._handlers[cls][event]:
                 found = True
-                res = (await invoke(self._handlers[cls][event], *args, **kwargs)) or res
+                res = (await invoke(self._handlers[cls][event], *args, **kwargs))
             if found:
                 return res
 

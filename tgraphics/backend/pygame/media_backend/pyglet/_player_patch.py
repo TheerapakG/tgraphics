@@ -42,8 +42,8 @@ class PatchedPlayer(pyglet.media.Player):
         self._tplayer = tgraphics_player
         super().__init__()
 
-    def play(self):
-        pyglet_clock_binder.add_player(self)
+    def play(self, window):
+        pyglet_clock_binder.add_player(self, window=window)
         super().play()
 
     def pause(self):

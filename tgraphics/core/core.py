@@ -16,11 +16,6 @@ class Window:
 
     def __init__(self, _back):
         self._window = _back
-        self._last_frame_time = None
-        self._current_frame_time = None
-        self._draw_time = datetime.timedelta()
-        self._frame_delta = None
-        self._target_fps = None
 
         @self.event
         def on_mouse_press(x, y, button, mods, first): # pylint: disable=unused-variable
@@ -100,47 +95,21 @@ class Window:
     icon = property(None, icon)
 
     def _on_draw(self, element):
-        current_time = time.perf_counter()
-        if self._target_fps and self._current_frame_time:
-            if datetime.timedelta(seconds=current_time - self._current_frame_time) + self._draw_time < datetime.timedelta(seconds=1) / self._target_fps:
-                return False
         element.render((0, 0))
-        self._last_frame_time, self._current_frame_time = self._current_frame_time, time.perf_counter()
-        self._draw_time = datetime.timedelta(seconds=self._current_frame_time - current_time)
-        if self._last_frame_time:
-            self._frame_delta = datetime.timedelta(seconds=self._current_frame_time - self._last_frame_time)
-        self._window.dispatch('on_draw_finished')
-        return True
-
-    async def _on_draw_async(self, element):
-        current_time = time.perf_counter()
-        if self._target_fps and self._current_frame_time:
-            target_time = datetime.timedelta(seconds=1) / self._target_fps
-            expect_time = datetime.timedelta(seconds=current_time - self._current_frame_time) + self._draw_time
-            await asyncio.sleep((target_time-expect_time).total_seconds())
-        element.render((0, 0))
-        self._last_frame_time, self._current_frame_time = self._current_frame_time, time.perf_counter()
-        self._draw_time = datetime.timedelta(seconds=self._current_frame_time - current_time)
-        if self._last_frame_time:
-            self._frame_delta = datetime.timedelta(seconds=self._current_frame_time - self._last_frame_time)
         self._window.dispatch('on_draw_finished')
         return True
 
     @property
     def frame_time(self):
-        return self._frame_delta
+        return self._window.frame_time
 
     @property
     def fps(self):
-        if self._frame_delta is not None:
-            try:
-                return datetime.timedelta(seconds=1)/self._frame_delta
-            except ZeroDivisionError:
-                return None
+        return self._window.fps
 
     @fps.setter
     def fps(self, fps):
-        self._target_fps = fps
+        self._window.fps = fps
 
     @property
     def target_element(self):
@@ -151,11 +120,9 @@ class Window:
         _WindowsBoundedElement[self] = element
         if element:
             self._window.event('on_draw')(partial(self._on_draw, element))
-            self._window.event('on_draw_async')(partial(self._on_draw_async, element))
             self._window.target = element
         else:
             self._window.event('on_draw')(None)
-            self._window.event('on_draw_async')(None)
             self._window.target = None
 
     def event(self, func):

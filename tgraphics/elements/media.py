@@ -6,8 +6,9 @@ class Player(ElementABC):
         super().__init__()
         self._player = _current_backend().media.Player()
 
-    def play(self):
-        self._player.play()
+    def play(self, window=None):
+        window = _current_backend().current_renderer().window if not window else window
+        self._player.play(window=window)
 
     def append(self, source):
         self._player.append(source)

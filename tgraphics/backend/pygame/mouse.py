@@ -1,7 +1,7 @@
 
 from copy import copy
 from ._mouse import *
-from .pygame import _mouses
+from .pygame import runner
 
 def pressed():
-    return copy(_mouses)
+    return copy(runner.mouses)

@@ -4,6 +4,7 @@ import datetime
 from enum import Enum, IntEnum
 import os
 import time
+import traceback
 
 os.environ['PYGAME_FREETYPE'] = "1"
 import pygame
@@ -563,7 +564,90 @@ class _Runner(EventDispatcher):
         else:
             raise InvalidLoopStateException()
 
-    async def run_event(self):
+    async def run_one_event(self, event):
+        _window = getattr(event, 'window', None)
+        if _window:
+            window = Window.get(_window)
+            self.current_renderer = window.renderer
+        else:
+            window = None
+
+        # TODO: LoOkUp FuNcTiOnS!?!
+        if event.type == pygame.QUIT:
+            self.running = False
+            return
+        elif event.type == pygame.KEYDOWN:
+            try:
+                key = Keys(event.key)
+            except ValueError:
+                key = event.key
+            try:
+                mod = Keys(event.mod)
+            except ValueError:
+                mod = event.mod
+            await window.dispatch_async('on_key_press', key, mod)
+        elif event.type == pygame.KEYUP:
+            try:
+                key = Keys(event.key)
+            except ValueError:
+                key = event.key
+            try:
+                mod = Keys(event.mod)
+            except ValueError:
+                mod = event.mod
+            await window.dispatch_async('on_key_release', key, mod)
+        elif event.type == pygame.MOUSEMOTION:
+            self.mouses = _mouse._mouse_from_pygtpl(event.buttons)
+            if self.mouses != _mouse.NButton:
+                await window.dispatch_async('on_mouse_drag', *event.pos, *event.rel, self.mouses)
+            else:
+                await window.dispatch_async('on_mouse_motion', *event.pos, *event.rel)
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
+                return
+            button = _mouse._mouse_from_pyg(event.button)
+            self.mouses &= ~button
+            last = False
+            if self.mouses == _mouse.NButton:
+                sdl_capturemouse(False)
+                last = True
+            await window.dispatch_async('on_mouse_release', *event.pos, button, pygame.key.get_mods(), last=last)
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
+                return
+            button = _mouse._mouse_from_pyg(event.button)
+            first = False
+            if self.mouses == _mouse.NButton:
+                sdl_capturemouse(True)
+                first = True
+            self.mouses |= button
+            await window.dispatch_async('on_mouse_press', *event.pos, button, pygame.key.get_mods(), first=first)
+        elif event.type == pygame.MOUSEWHEEL:
+            if event.flipped:
+                dx = -event.x
+                dy = -event.y
+            else:
+                dx = event.x
+                dy = event.y
+
+            await window.dispatch_async('on_mouse_scroll', *pygame.mouse.get_pos(), dx, dy)
+        elif event.type == pygame.WINDOWEVENT:
+            if event.event == pygame.WINDOWEVENT_CLOSE:
+                await window.dispatch_async('on_close')
+            elif event.event == pygame.WINDOWEVENT_ENTER:
+                await window.dispatch_async('on_mouse_enter')
+            elif event.event == pygame.WINDOWEVENT_LEAVE:
+                await window.dispatch_async('on_mouse_leave')
+            elif event.event == pygame.WINDOWEVENT_HIDDEN:
+                await window.dispatch_async('on_hide')
+            elif event.event == pygame.WINDOWEVENT_MOVED:
+                await window.dispatch_async('on_move', -1, -1)
+            elif event.event == pygame.WINDOWEVENT_RESIZED:
+                await window.dispatch_async('on_resize', -1, -1)
+            elif event.event == pygame.WINDOWEVENT_SHOWN:
+                await window.dispatch_async('on_show', -1, -1)
+
+    async def run_events(self):
         pygame.event.clear()
         _mouse._mouse_from_pygtpl(pygame.mouse.get_pressed(5))
 
@@ -582,88 +666,11 @@ class _Runner(EventDispatcher):
             for event in pygame.event.get():
                 if not self.running:
                     return
-
-                _window = getattr(event, 'window', None)
-                if _window:
-                    window = Window.get(_window)
-                    self.current_renderer = window.renderer
-                else:
-                    window = None
-
-                # TODO: LoOkUp FuNcTiOnS!?!
-                if event.type == pygame.QUIT:
-                    _running = False
-                    return
-                elif event.type == pygame.KEYDOWN:
-                    try:
-                        key = Keys(event.key)
-                    except ValueError:
-                        key = event.key
-                    try:
-                        mod = Keys(event.mod)
-                    except ValueError:
-                        mod = event.mod
-                    window.dispatch('on_key_press', key, mod)
-                elif event.type == pygame.KEYUP:
-                    try:
-                        key = Keys(event.key)
-                    except ValueError:
-                        key = event.key
-                    try:
-                        mod = Keys(event.mod)
-                    except ValueError:
-                        mod = event.mod
-                    window.dispatch('on_key_release', key, mod)
-                elif event.type == pygame.MOUSEMOTION:
-                    self.mouses = _mouse._mouse_from_pygtpl(event.buttons)
-                    if self.mouses != _mouse.NButton:
-                        window.dispatch('on_mouse_drag', *event.pos, *event.rel, self.mouses)
-                    else:
-                        window.dispatch('on_mouse_motion', *event.pos, *event.rel)
-                elif event.type == pygame.MOUSEBUTTONUP:
-                    if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
-                        continue
-                    button = _mouse._mouse_from_pyg(event.button)
-                    self.mouses &= ~button
-                    last = False
-                    if self.mouses == _mouse.NButton:
-                        sdl_capturemouse(False)
-                        last = True
-                    window.dispatch('on_mouse_release', *event.pos, button, pygame.key.get_mods(), last=last)
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == pygame.BUTTON_WHEELDOWN or event.button == pygame.BUTTON_WHEELUP:
-                        continue
-                    button = _mouse._mouse_from_pyg(event.button)
-                    first = False
-                    if self.mouses == _mouse.NButton:
-                        sdl_capturemouse(True)
-                        first = True
-                    self.mouses |= button
-                    window.dispatch('on_mouse_press', *event.pos, button, pygame.key.get_mods(), first=first)
-                elif event.type == pygame.MOUSEWHEEL:
-                    if event.flipped:
-                        dx = -event.x
-                        dy = -event.y
-                    else:
-                        dx = event.x
-                        dy = event.y
-
-                    window.dispatch('on_mouse_scroll', *pygame.mouse.get_pos(), dx, dy)
-                elif event.type == pygame.WINDOWEVENT:
-                    if event.event == pygame.WINDOWEVENT_CLOSE:
-                        window.dispatch('on_close')
-                    elif event.event == pygame.WINDOWEVENT_ENTER:
-                        window.dispatch('on_mouse_enter')
-                    elif event.event == pygame.WINDOWEVENT_LEAVE:
-                        window.dispatch('on_mouse_leave')
-                    elif event.event == pygame.WINDOWEVENT_HIDDEN:
-                        window.dispatch('on_hide')
-                    elif event.event == pygame.WINDOWEVENT_MOVED:
-                        window.dispatch('on_move', -1, -1)
-                    elif event.event == pygame.WINDOWEVENT_RESIZED:
-                        window.dispatch('on_resize', -1, -1)
-                    elif event.event == pygame.WINDOWEVENT_SHOWN:
-                        window.dispatch('on_show', -1, -1)
+                try:
+                    await self.run_one_event(event)
+                except Exception:
+                    print('Exception while dispatching event', event)
+                    print(traceback.format_exc())
             
             current_loop_time = time.perf_counter()
             loop_run_time = datetime.timedelta(seconds=current_loop_time - current_start_time)
@@ -677,7 +684,7 @@ class _Runner(EventDispatcher):
         for window in _Windows:
             self.tasks_set.add(asyncio.create_task(window.draw_schedule()))
 
-        self.tasks_set.add(asyncio.create_task(self.run_event()))
+        self.tasks_set.add(asyncio.create_task(self.run_events()))
 
         await self._stop_event.wait()
         for event in self.tasks_set:

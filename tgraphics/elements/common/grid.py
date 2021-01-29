@@ -1,3 +1,4 @@
+import asyncio
 from enum import auto, Enum
 import itertools
 from typing import NamedTuple, Optional, Union
@@ -66,7 +67,7 @@ class Grid(ElementABC):
         }
 
     @event_handler
-    def on_mouse_motion(self, x, y, dx, dy): # pylint: disable=unused-variable
+    async def on_mouse_motion(self, x, y, dx, dy): # pylint: disable=unused-variable
         self._mouse_pos = (x, y)
         found = False
         for sub, pos in self.elements_at(x, y, actual_loc=True):
@@ -74,93 +75,99 @@ class Grid(ElementABC):
                 self._mouse_target = sub
                 found = True
             if self._mouse_enter is sub:
-                sub.element.dispatch('on_mouse_motion', *pos, dx, dy)
+                await sub.element.dispatch_async('on_mouse_motion', *pos, dx, dy)
                 return True
             if self._mouse_enter is not sub:
-                if any([sub.element.dispatch('on_mouse_enter'), sub.element.dispatch('on_mouse_motion', *pos, dx, dy)]):
+                if any(await asyncio.gather(
+                    sub.element.dispatch_async('on_mouse_enter'), 
+                    sub.element.dispatch_async('on_mouse_motion', *pos, dx, dy)
+                )):
                     if self._mouse_enter:
-                        self._mouse_enter.element.dispatch('on_mouse_leave')
+                        await self._mouse_enter.element.dispatch_async('on_mouse_leave')
                     self._mouse_enter = sub
                     return True
 
         if not found:
             if self._mouse_enter:
-                self._mouse_enter.element.dispatch('on_mouse_leave')
+                await self._mouse_enter.element.dispatch_async('on_mouse_leave')
             self._mouse_target = None
             self._mouse_enter = None
             return True
         return False
 
     @event_handler
-    def on_element_motion(self, x, y, element): # pylint: disable=unused-variable
+    async def on_element_motion(self, x, y, element): # pylint: disable=unused-variable
         found = False
         for sub, pos in self.elements_at(x, y, actual_loc=True):
             if not found:
                 self._element_target = sub
                 found = True
             if self._element_enter is sub:
-                sub.element.dispatch('on_element_motion', *pos, element)
+                await sub.element.dispatch_async('on_element_motion', *pos, element)
                 return True
             if self._element_enter is not sub:
-                if any([sub.element.dispatch('on_element_enter', element), sub.element.dispatch('on_element_motion', *pos, element)]):
+                if any(await asyncio.gather(
+                    sub.element.dispatch_async('on_element_enter', element), 
+                    sub.element.dispatch_async('on_element_motion', *pos, element)
+                )):
                     if self._element_enter:
-                        self._element_enter.element.dispatch('on_element_leave', element)
+                        await self._element_enter.element.dispatch_async('on_element_leave', element)
                     self._element_enter = sub
                     return True
 
         if not found:
             if self._element_enter:
-                self._element_enter.element.dispatch('on_element_leave', element)
+                await self._element_enter.element.dispatch_async('on_element_leave', element)
             self._element_target = None
             self._element_enter = None
             return True
         return False
 
     @event_handler
-    def on_mouse_leave(self): # pylint: disable=unused-variable
+    async def on_mouse_leave(self): # pylint: disable=unused-variable
         self._mouse_pos = None
         val = False
         if self._mouse_enter:
-            val = self._mouse_enter.element.dispatch('on_mouse_leave')
+            val = await self._mouse_enter.element.dispatch_async('on_mouse_leave')
             self._mouse_enter = None
         return val
 
     @event_handler
-    def on_element_leave(self, element): # pylint: disable=unused-variable
+    async def on_element_leave(self, element): # pylint: disable=unused-variable
         val = False
         if self._element_enter:
-            val = self._element_enter.element.dispatch('on_element_leave', element)
+            val = await self._element_enter.element.dispatch_async('on_element_leave', element)
             self._element_enter = None
         return val
 
     @event_handler
-    def on_mouse_drag(self, x, y, dx, dy, buttons): # pylint: disable=unused-variable
+    async def on_mouse_drag(self, x, y, dx, dy, buttons): # pylint: disable=unused-variable
         self._mouse_pos = (x, y)
-        return self._dispatch_sub(self._mouse_press, 'on_mouse_drag', x, y, dx, dy, buttons)
+        return await self._dispatch_sub(self._mouse_press, 'on_mouse_drag', x, y, dx, dy, buttons)
 
     @event_handler
-    def on_mouse_press(self, x, y, button, mods, first): # pylint: disable=unused-variable
+    async def on_mouse_press(self, x, y, button, mods, first): # pylint: disable=unused-variable
         self._mouse_pos = (x, y)
         if self._mouse_press:
-            self._dispatch_sub(self._mouse_press, 'on_mouse_press', x, y, button, mods, first=False)
+            await self._dispatch_sub(self._mouse_press, 'on_mouse_press', x, y, button, mods, first=False)
             return True
         elif self._mouse_target and first:
-            self._mouse_press = self._try_dispatch('on_mouse_press', x, y, button, mods, first=True)
+            self._mouse_press = await self._try_dispatch('on_mouse_press', x, y, button, mods, first=True)
             if self._mouse_press:
                 if self._mouse_press is not self._mouse_enter:
-                    self._mouse_enter.element.dispatch('on_mouse_leave')
+                    await self._mouse_enter.element.dispatch_async('on_mouse_leave')
                     self._mouse_enter = None
                 return True
 
         return False
 
     @event_handler
-    def on_mouse_release(self, x, y, button, mods, last): # pylint: disable=unused-variable
+    async def on_mouse_release(self, x, y, button, mods, last): # pylint: disable=unused-variable
         self._mouse_pos = (x, y)
         if not self._mouse_press:
             return False
 
-        self._dispatch_sub(self._mouse_press, 'on_mouse_release', x, y, button, mods, last=last)
+        await self._dispatch_sub(self._mouse_press, 'on_mouse_release', x, y, button, mods, last=last)
 
         if last:
             self._mouse_press = None
@@ -171,14 +178,14 @@ class Grid(ElementABC):
                     found = True
                 if self._mouse_enter is sub:
                     return True
-                elif sub.element.dispatch('on_mouse_enter'):
+                elif await sub.element.dispatch_async('on_mouse_enter'):
                     if self._mouse_enter:
-                        self._mouse_enter.element.dispatch('on_mouse_leave')
+                        await self._mouse_enter.element.dispatch_async('on_mouse_leave')
                     self._mouse_enter = sub
                     return True
             
             if self._mouse_enter:
-                self._mouse_enter.element.dispatch('on_mouse_leave')
+                await self._mouse_enter.element.dispatch_async('on_mouse_leave')
                 self._mouse_enter = None
 
             if not found:
@@ -187,50 +194,50 @@ class Grid(ElementABC):
         return True
 
     @event_handler
-    def on_element_dropped(self, x, y, element):
+    async def on_element_dropped(self, x, y, element):
         if self._element_target:
             self._element_target = None
             self._element_enter = None
-            return self._try_dispatch('on_element_dropped', x, y, element)
+            return await self._try_dispatch('on_element_dropped', x, y, element)
 
         return False
 
     @event_handler
-    def on_element_undropped(self, x, y, element):
+    async def on_element_undropped(self, x, y, element):
         if self._element_target:
             self._element_target = None
             self._element_enter = None
-            return self._try_dispatch('on_element_undropped', x, y, element)
+            return await self._try_dispatch('on_element_undropped', x, y, element)
 
         return False
 
     @event_handler
-    def on_mouse_scroll(self, x, y, dx, dy): # pylint: disable=unused-variable
+    async def on_mouse_scroll(self, x, y, dx, dy): # pylint: disable=unused-variable
         self._mouse_pos = (x, y)
         if self._mouse_press:
-            self._dispatch_sub(self._mouse_press, 'on_mouse_scroll', x, y, dx, dy)
+            await self._dispatch_sub(self._mouse_press, 'on_mouse_scroll', x, y, dx, dy)
             return True
-        if self._mouse_target and self._try_dispatch('on_mouse_scroll', x, y, dx, dy):
-            return True
-        
-        return False
-
-    @event_handler
-    def on_key_press(self, key, mod): # pylint: disable=unused-variable
-        if self._mouse_press:
-            self._dispatch_sub(self._mouse_press, 'on_key_press', key, mod)
-            return True
-        if self._mouse_pos and self._try_dispatch('on_key_press', *self._mouse_pos, key, mod, _forward_pos=False):
+        if self._mouse_target and await self._try_dispatch('on_mouse_scroll', x, y, dx, dy):
             return True
         
         return False
 
     @event_handler
-    def on_key_release(self, key, mod): # pylint: disable=unused-variable
+    async def on_key_press(self, key, mod): # pylint: disable=unused-variable
         if self._mouse_press:
-            self._dispatch_sub(self._mouse_press, 'on_key_release', key, mod)
+            await self._dispatch_sub(self._mouse_press, 'on_key_press', key, mod)
             return True
-        if self._mouse_pos and self._try_dispatch('on_key_release', *self._mouse_pos, key, mod, _forward_pos=False):
+        if self._mouse_pos and await self._try_dispatch('on_key_press', *self._mouse_pos, key, mod, _forward_pos=False):
+            return True
+        
+        return False
+
+    @event_handler
+    async def on_key_release(self, key, mod): # pylint: disable=unused-variable
+        if self._mouse_press:
+            await self._dispatch_sub(self._mouse_press, 'on_key_release', key, mod)
+            return True
+        if self._mouse_pos and await self._try_dispatch('on_key_release', *self._mouse_pos, key, mod, _forward_pos=False):
             return True
         
         return False
@@ -259,16 +266,16 @@ class Grid(ElementABC):
             if sub is after or sub.element is after:
                 _found = True
 
-    def _dispatch_sub(self, sub: Optional[Subelement], event, x, y, *args, **kwargs):
+    async def _dispatch_sub(self, sub: Optional[Subelement], event, x, y, *args, **kwargs):
         if sub:
-            return sub.element.dispatch(event, x + self._loc[0] - sub.offset[0], y + self._loc[1] - sub.offset[1], *args, **kwargs)
+            return await sub.element.dispatch_async(event, x + self._loc[0] - sub.offset[0], y + self._loc[1] - sub.offset[1], *args, **kwargs)
         else:
             return False
 
-    def _try_dispatch(self, event, x, y, *args, _dispatch_after=None, _tries=None, _forward_pos=True, **kwargs):
+    async def _try_dispatch(self, event, x, y, *args, _dispatch_after=None, _tries=None, _forward_pos=True, **kwargs):
         tries = range(_tries) if _tries else itertools.count()
         for (sub, pos), _ in zip(self.elements_at(x, y, actual_loc=True, after=_dispatch_after), tries):
-            if (sub.element.dispatch(event, *pos, *args, **kwargs) if _forward_pos else sub.element.dispatch(event, *args, **kwargs)):
+            if (await (sub.element.dispatch_async(event, *pos, *args, **kwargs) if _forward_pos else sub.element.dispatch_async(event, *args, **kwargs))):
                 return sub
 
         return None
@@ -279,36 +286,37 @@ class Grid(ElementABC):
         match.offset = (n_off[0] + dx, n_off[1] + dy)
         return True
 
-    def _on_child_this_dropped(self, this):
+    async def _on_child_this_dropped(self, this):
         match = next((sub for sub in self._sub if sub.element is this), None)
         if match:
             n_off = match.offset
             sz = this.size
             child_pos = (n_off[0] + (sz[0]/2), n_off[1] + (sz[1]/2))
             try:
-                sub = self._try_dispatch('on_element_dropped', *child_pos, this, _dispatch_after=this)
+                sub = await self._try_dispatch('on_element_dropped', *child_pos, this, _dispatch_after=this)
             except DropNotSupportedError as e:
                 if self._element_enter and e.element is not self._element_enter:
-                    self._element_enter.element.dispatch('on_element_leave', this)
+                    await self._element_enter.element.dispatch_async('on_element_leave', this)
                 self._element_enter = None
-                raise e
+                await this.dispatch_async('on_drop_unsupported', e.element)
+                return True
             
             if not sub:
                 return False
             if sub is not self._element_enter:
                 if self._element_enter:
-                    self._element_enter.element.dispatch('on_element_leave', this)
+                    await self._element_enter.element.dispatch_async('on_element_leave', this)
             self._element_enter = None
                 
         return True
 
-    def _on_child_this_undropped(self, this):
+    async def _on_child_this_undropped(self, this):
         if self._element_enter:
-            self._element_enter.element.dispatch('on_element_leave', this)
+            await self._element_enter.element.dispatch_async('on_element_leave', this)
         self._element_enter = None
         return True
 
-    def _on_child_this_dragged(self, this):
+    async def _on_child_this_dragged(self, this):
         match = next((sub for sub in self._sub if sub.element is this), None)
         if match:
             n_off = match.offset
@@ -316,16 +324,16 @@ class Grid(ElementABC):
             child_pos = (n_off[0] + (sz[0]/2), n_off[1] + (sz[1]/2))
             for sub, pos in self.elements_at(*child_pos, actual_loc=True, after=this):
                 if sub is self._element_enter:
-                    self._dispatch_sub(sub, 'on_element_motion', *child_pos, this)
+                    await self._dispatch_sub(sub, 'on_element_motion', *child_pos, this)
                     break
-                elif sub.element.dispatch('on_element_enter', this):
+                elif await sub.element.dispatch_async('on_element_enter', this):
                     if self._element_enter:
-                        self._element_enter.element.dispatch('on_element_leave', this)
+                        await self._element_enter.element.dispatch_async('on_element_leave', this)
                     self._element_enter = sub
                     break
             else:
                 if self._element_enter:
-                    self._element_enter.element.dispatch('on_element_leave', this)
+                    await self._element_enter.element.dispatch_async('on_element_leave', this)
                 self._element_enter = None
 
         return True

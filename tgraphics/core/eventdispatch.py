@@ -1,6 +1,7 @@
 from abc import ABCMeta
 from collections import defaultdict
 from functools import partial
+import traceback
 from types import MethodType
 
 from ..utils.typehint import *
@@ -28,6 +29,21 @@ def event_handler(func, *, name=None):
         return partial(event_handler, name=func)
     return EventHandler(name if name else func.__name__, func)
 
+def _invoke(f, *args, _event, **kwargs):
+    try:
+        return f(*args, **kwargs)
+    except Exception as e:
+        print('Exception while dispatching event listener', _event)
+        print(traceback.format_exc())
+        return False
+
+async def _invoke_async(f, *args, _event, **kwargs):
+    try:
+        return await invoke(f, *args, **kwargs)
+    except Exception as e:
+        print('Exception while dispatching event listener', _event)
+        print(traceback.format_exc())
+        return False
 
 class EventLookupHelper:
     def __init__(self, dispatcher):
@@ -57,7 +73,7 @@ class EventLookupHelper:
         res = False
         for cls in anchor.__mro__:
             if self._listeners[cls][event]:
-                res = any([f(*args, **kwargs) for f in self._listeners[cls][event].copy()]) or res
+                res = any([_invoke(f, *args, _event=event, **kwargs) for f in self._listeners[cls][event].copy()]) or res
             if self._handlers[cls][event]:
                 found = True
                 res = self._handlers[cls][event](*args, **kwargs)
@@ -74,10 +90,10 @@ class EventLookupHelper:
         res = False
         for cls in anchor.__mro__:
             if self._listeners[cls][event]:
-                res = any([await invoke(f, *args, **kwargs) for f in self._listeners[cls][event].copy()]) or res
+                res = any([await _invoke_async(f, *args, _event=event, **kwargs) for f in self._listeners[cls][event].copy()]) or res
             if self._handlers[cls][event]:
                 found = True
-                res = (await invoke(self._handlers[cls][event], *args, **kwargs))
+                res = await invoke(self._handlers[cls][event], *args, **kwargs)
             if found:
                 return res
 

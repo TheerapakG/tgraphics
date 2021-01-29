@@ -92,7 +92,7 @@ class Button(ElementABC):
         return True
 
     @event_handler
-    def on_mouse_release(self, x, y, button, mods, last): # pylint: disable=unused-variable
+    async def on_mouse_release(self, x, y, button, mods, last): # pylint: disable=unused-variable
         if button == _current_backend().mouse.MouseButton.LEFT:
             self._clicking = False                
             if last:
@@ -103,12 +103,12 @@ class Button(ElementABC):
                 elif self._type == ButtonType.TOGGLE:
                     if self._state == ButtonState.OFF:
                         self._state = ButtonState.ON
-                        self.dispatch('on_button_on')
+                        await self.dispatch_async('on_button_on')
                     else:
                         self._state = ButtonState.OFF
-                        self.dispatch('on_button_off')
+                        await self.dispatch_async('on_button_off')
                 else:
-                    self.dispatch('on_button_press')
+                    await self.dispatch_async('on_button_press')
         elif last:
             self._clicking = False 
         return True

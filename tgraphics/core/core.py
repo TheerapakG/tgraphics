@@ -18,32 +18,32 @@ class Window:
         self._window = _back
 
         @self.event
-        def on_mouse_press(x, y, button, mods, first): # pylint: disable=unused-variable
+        async def on_mouse_press(x, y, button, mods, first): # pylint: disable=unused-variable
             if not self._current_mouse_interact:
                 self._current_mouse_interact = self     
             else:
                 assert self._current_mouse_interact is self, "mouse event not locked to a window after clicked"
 
             if self.target_element:
-                return self.target_element.dispatch('on_mouse_press', x, y, button, mods, first=first)
+                return await self.target_element.dispatch_async('on_mouse_press', x, y, button, mods, first=first)
             else:
                 return False
 
         @self.event
-        def on_mouse_drag(x, y, dx, dy, buttons): # pylint: disable=unused-variable
+        async def on_mouse_drag(x, y, dx, dy, buttons): # pylint: disable=unused-variable
             assert self._current_mouse_interact is self, "mouse event not locked to a window after clicked"
 
             if self.target_element:
-                return self.target_element.dispatch('on_mouse_drag', x, y, dx, dy, buttons)
+                return await self.target_element.dispatch_async('on_mouse_drag', x, y, dx, dy, buttons)
             else:
                 return False
 
         @self.event
-        def on_mouse_release(x, y, button, mods, last): # pylint: disable=unused-variable
+        async def on_mouse_release(x, y, button, mods, last): # pylint: disable=unused-variable
             assert self._current_mouse_interact is self, "mouse event not locked to a window after clicked"
 
             if self.target_element:
-                return self.target_element.dispatch('on_mouse_release', x, y, button, mods, last=last)
+                return await self.target_element.dispatch_async('on_mouse_release', x, y, button, mods, last=last)
             else:
                 return False
 

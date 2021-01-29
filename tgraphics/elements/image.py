@@ -19,6 +19,10 @@ class Image(ElementABC):
         _back = _current_backend()
         return Image(_back.Texture.from_file(_back.current_renderer(), io, ext_hint))
 
+    @staticmethod
+    def from_texture(texture):
+        return Image(texture.as_size(texture.size))
+
     @property
     def size(self):
         return self._tex.size

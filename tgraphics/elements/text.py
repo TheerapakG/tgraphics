@@ -1,10 +1,13 @@
 from ..core.backend_loader import _current_backend
 from ..core.elementABC import ElementABC
 
+def set_default_font(font):
+    _current_backend().text.set_default_font(font)
+
 class Label(ElementABC):
-    def __init__(self, text, size, *, font_name='', bold=False, italic=False, color=(255, 255, 255, 255)):
+    def __init__(self, text, size, *, font='', bold=False, italic=False, color=(255, 255, 255, 255)):
         super().__init__()
-        self._instance = _current_backend().text.Label(text, font_name, bold, italic, size, color)
+        self._instance = _current_backend().text.Label(text, font, bold, italic, size, color)
         self._static = True
 
     @property

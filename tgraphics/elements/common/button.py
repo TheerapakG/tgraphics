@@ -143,14 +143,14 @@ class Button(ElementABC):
 
 
 class LabelButton(Button):
-    def __init__(self, size, text=None, text_size=None, *, font_name='', bold=False, italic=False, color=(255, 255, 255, 255), _text_label=None, **kwargs):
+    def __init__(self, size, text=None, text_size=None, *, font='', bold=False, italic=False, color=(255, 255, 255, 255), _text_label=None, **kwargs):
         if not _text_label:
-            _text_label = Label(text, text_size, font_name=font_name, bold=bold, italic=italic, color=color)
+            _text_label = Label(text, text_size, font=font, bold=bold, italic=italic, color=color)
         super().__init__(size, fg=_text_label, **kwargs)
 
     @classmethod
-    def with_margin(cls, text, text_size, margin, marginy=None, *, font_name='', bold=False, italic=False, color=(255, 255, 255, 255), **kwargs):
-        label = Label(text, text_size, font_name=font_name, bold=bold, italic=italic, color=color)
+    def with_margin(cls, text, text_size, margin, marginy=None, *, font='', bold=False, italic=False, color=(255, 255, 255, 255), **kwargs):
+        label = Label(text, text_size, font=font, bold=bold, italic=italic, color=color)
         sz = label.size
         if not marginy:
             sz = (sz[0] + margin, sz[1] + margin)

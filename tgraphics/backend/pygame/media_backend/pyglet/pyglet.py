@@ -1,4 +1,6 @@
 import pyglet
+pyglet.options['audio'] = ('pulse', 'openal', 'xaudio2', 'directsound')
+
 from pyglet.gl import *
 import os
 from pathlib import Path
@@ -31,8 +33,19 @@ class Player:
     def play(self, window):
         self._player.play(window=window)
 
+    def pause(self):
+        self._player.pause()
+
     def append(self, source):
         self._player.queue(source._source)
+
+    @property
+    def loop(self):
+        return self._player.loop
+
+    @loop.setter
+    def loop(self, loop):
+        self._player.loop = loop    
 
     @property
     def source(self):
@@ -53,9 +66,7 @@ class Source:
 
     @staticmethod
     def from_file(filename, preload=False):
-        media = pyglet.media.load(filename)
-        if preload:
-            media = pyglet.media.StaticSource(media)
+        media = pyglet.media.load(filename, streaming=not preload)
         return Source(media)
 
     @property

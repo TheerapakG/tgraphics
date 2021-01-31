@@ -545,6 +545,8 @@ class _Runner(EventDispatcher):
     mouses = None
     current_renderer = None
     tasks_set = set()
+    cleanup_coro = list()
+    GARBAGE_CLEANUP_PERIOD = 60
 
     _stop_event = None
 
@@ -631,21 +633,35 @@ class _Runner(EventDispatcher):
                 dy = event.y
 
             await window.dispatch_async('on_mouse_scroll', *pygame.mouse.get_pos(), dx, dy)
-        elif event.type == pygame.WINDOWEVENT:
-            if event.event == pygame.WINDOWEVENT_CLOSE:
-                await window.dispatch_async('on_close')
-            elif event.event == pygame.WINDOWEVENT_ENTER:
-                await window.dispatch_async('on_mouse_enter')
-            elif event.event == pygame.WINDOWEVENT_LEAVE:
-                await window.dispatch_async('on_mouse_leave')
-            elif event.event == pygame.WINDOWEVENT_HIDDEN:
-                await window.dispatch_async('on_hide')
-            elif event.event == pygame.WINDOWEVENT_MOVED:
-                await window.dispatch_async('on_move', -1, -1)
-            elif event.event == pygame.WINDOWEVENT_RESIZED:
-                await window.dispatch_async('on_resize', -1, -1)
-            elif event.event == pygame.WINDOWEVENT_SHOWN:
-                await window.dispatch_async('on_show', -1, -1)
+        
+        elif event.type == pygame.WINDOWCLOSE:
+            await window.dispatch_async('on_close')
+        elif event.type == pygame.WINDOWENTER:
+            await window.dispatch_async('on_mouse_enter')
+        elif event.type == pygame.WINDOWLEAVE:
+            await window.dispatch_async('on_mouse_leave')
+        elif event.type == pygame.WINDOWHIDDEN:
+            await window.dispatch_async('on_hide')
+        elif event.type == pygame.WINDOWMOVED:
+            await window.dispatch_async('on_move', -1, -1)
+        elif event.type == pygame.WINDOWRESIZED:
+            await window.dispatch_async('on_resize', -1, -1)
+        elif event.type == pygame.WINDOWSHOWN:
+            await window.dispatch_async('on_show', -1, -1)
+        elif event.type == pygame.WINDOWMINIMIZED:
+            await window.dispatch_async('on_minimized')
+        elif event.type == pygame.WINDOWMAXIMIZED:
+            await window.dispatch_async('on_maximized')
+        elif event.type == pygame.WINDOWRESTORED:
+            await window.dispatch_async('on_restored')
+        elif event.type == pygame.WINDOWFOCUSGAINED:
+            await window.dispatch_async('on_gain_focus')
+        elif event.type == pygame.WINDOWFOCUSLOST:
+            await window.dispatch_async('on_lost_focus')
+        elif event.type == pygame.WINDOWTAKEFOCUS:
+            await window.dispatch_async('on_offered_focus')
+        elif event.type == pygame.WINDOWHITTEST:
+            await window.dispatch_async('on_hit_test')
 
     async def run_events(self):
         pygame.event.clear()
@@ -678,6 +694,21 @@ class _Runner(EventDispatcher):
             # TODO: if not in "hog cpu" context (another thing to do) then yield to other process
             # until before next frame is needed, then we just await asyncio.sleep(0) at the start of this loop
 
+    async def run_coros_cleanup(self):
+        while self.running:
+            finished = [c for c in self.cleanup_coro if c.done()]
+            self.cleanup_coro = [c for c in self.cleanup_coro if not c.done()]
+            for c in finished:
+                try:
+                    await c
+                except Exception:
+                    print('Exception while cleaning up coroutine', c)
+                    print(traceback.format_exc())
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), self.GARBAGE_CLEANUP_PERIOD)
+            except asyncio.TimeoutError:
+                pass
+
     async def run_all(self):
         self._stop_event = asyncio.Event()
 
@@ -685,11 +716,14 @@ class _Runner(EventDispatcher):
             self.tasks_set.add(asyncio.create_task(window.draw_schedule()))
 
         self.tasks_set.add(asyncio.create_task(self.run_events()))
+        self.tasks_set.add(asyncio.create_task(self.run_coros_cleanup()))
 
         await self._stop_event.wait()
         for event in self.tasks_set:
             await event
 
+    def cleanup_coro_done(self, coro):
+        self.cleanup_coro.append(coro)
 
 runner = _Runner()
 
@@ -712,3 +746,6 @@ def current_renderer() -> Renderer:
         return runner.current_renderer
     else:
         raise InvalidRendererStateException()
+
+def cleanup_coro_done(coro):
+    runner.cleanup_coro_done(coro)

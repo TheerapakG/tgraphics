@@ -9,9 +9,20 @@ class Player(ElementABC):
     def play(self, window=None):
         window = _current_backend().current_renderer().window if not window else window
         self._player.play(window=window)
+        
+    def pause(self):
+        self._player.pause()
 
     def append(self, source):
         self._player.append(source)
+
+    @property
+    def loop(self):
+        return self._player.loop
+
+    @loop.setter
+    def loop(self, loop):
+        self._player.loop = loop
 
     @property
     def size(self):

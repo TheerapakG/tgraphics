@@ -10,7 +10,7 @@ class _PygletClockBinder:
 
     def add_player(self, player, window):
         if not self.players[window]:
-            window.event['on_draw'].add_listener(pyglet.clock.tick)
+            window.event['on_draw'].add_listener(player.tick)
             window.event['on_destroy'].add_listener(player.delete)
         self.players[window].add(player)
         self.windows[player] = window
@@ -24,7 +24,7 @@ class _PygletClockBinder:
         del self.windows[player]
         self.players[window].discard(player)
         if not self.players[window]:
-            window.event['on_draw'].remove_listener(pyglet.clock.tick)
+            window.event['on_draw'].remove_listener(player.tick)
             window.event['on_destroy'].remove_listener(player.delete)
 
 pyglet_clock_binder = _PygletClockBinder()

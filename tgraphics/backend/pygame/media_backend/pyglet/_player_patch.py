@@ -32,23 +32,89 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 # ----------------------------------------------------------------------------
-
+import asyncio
 import pyglet
+import time
 
+from ...pygame import cleanup_coro_done
 from ._pyglet_clock_binder import pyglet_clock_binder
+
+# patch MediaEvent class as we do not use pyglet's app event loop
+class MediaEvent:
+    """Representation of a media event.
+    These events are used internally by some audio driver implementation to
+    communicate events to the :class:`~pyglet.media.player.Player`.
+    One example is the ``on_eos`` event.
+    Args:
+        timestamp (float): The time where this event happens.
+        event (str): Event description.
+        *args: Any required positional argument to go along with this event.
+    """
+    def __init__(self, timestamp, event, *args):
+        # Meaning of timestamp is dependent on context; and not seen by
+        # application.
+        self.timestamp = timestamp
+        self.event = event
+        self.args = args
+
+    async def _dispatch_player_event(self, player):
+        player.dispatch_event(self.event, *self.args)
+
+    def _sync_dispatch_to_player(self, player):
+        # pyglet.app.platform_event_loop.post_event(player, self.event, *self.args)
+        # time.sleep(0)
+        cleanup_coro_done(asyncio.create_task(self._dispatch_player_event(player)))
+        time.sleep(0)
+        # TODO sync with media.dispatch_events
+
+    def __repr__(self):
+        return '%s(%r, %r, %r)' % (self.__class__.__name__,
+                                   self.timestamp, self.event, self.args)
+    
+    def __lt__(self, other):
+        return hash(self) < hash(other)
+
+pyglet.media.events.MediaEvent = MediaEvent
 
 class PatchedPlayer(pyglet.media.Player):
     def __init__(self, tgraphics_player):
         self._tplayer = tgraphics_player
+        self._prev_time = None
+        self._window = None
         super().__init__()
 
+    def tick(self):
+        pyglet.clock.tick()
+        c_time = pyglet.clock.get_default().cumulative_time
+        if self._prev_time:
+            time_loss = (c_time - self._prev_time)
+            if time_loss > 0.1:
+                super().pause()
+                if time_loss > 0.5:
+                    print('compensating audio loss by seeking back', time_loss, 'seconds')
+                    print('(seeking to', max(0, super().time-time_loss), 'seconds)')
+                    super().seek(max(0, super().time-time_loss))
+                else:
+                    print('fixing audio after longer than expected time jump of', time_loss, 'seconds')
+                    print('(seeking to', super().time, 'seconds)')
+                    super().seek(super().time)
+                super().play()
+        self._prev_time = c_time
+
     def play(self, window):
-        pyglet_clock_binder.add_player(self, window=window)
+        self._window = window
         super().play()
 
-    def pause(self):
-        super().pause()
-        pyglet_clock_binder.remove_player(self)
+    def _create_audio_player(self):
+        super()._create_audio_player()
+
+    def _set_playing(self, playing):
+        if self._playing and not playing:
+            pyglet_clock_binder.remove_player(self)
+        elif not self._playing and playing:
+            self._prev_time = None
+            pyglet_clock_binder.add_player(self, window=self._window)
+        super()._set_playing(playing)
 
     def delete(self):
         pyglet_clock_binder.remove_player(self)

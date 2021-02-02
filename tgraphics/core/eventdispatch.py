@@ -208,9 +208,6 @@ class EventDispatcherMetaMixin:
     @classmethod
     def composite_with(cls, other_cls):
         class EventDispatcherCompositeMeta(cls, other_cls):
-            def __new__(this_cls, clsname, bases, attrs):
-                return super(EventDispatcherCompositeMeta, this_cls).__new__(this_cls, clsname, bases, attrs)
-
             @classmethod
             def get_base(this_cls):
                 class EventDispatcherCompositeBase(metaclass=this_cls):

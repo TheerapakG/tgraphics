@@ -363,7 +363,9 @@ class Grid(ElementABC):
         note: adding the same element which its position may change might result in an unexpected behavior
         """
         self._add_listeners(child)
-        self._sub.insert(index, Subelement(child, position))
+        handle = Subelement(child, position)
+        self._sub.insert(index, handle)
+        return handle
 
     def add_child_top(self, child: ElementABC, position):
         """
@@ -372,7 +374,9 @@ class Grid(ElementABC):
         note: adding the same element which its position may change might result in an unexpected behavior
         """
         self._add_listeners(child)
-        self._sub.append(Subelement(child, position))
+        handle = Subelement(child, position)
+        self._sub.append(handle)
+        return handle
 
     def pop_child_top_sub(self) -> Subelement:
         sub = self._sub.pop()

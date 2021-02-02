@@ -5,12 +5,15 @@ Copyright (c) 2020-2021 TheerapakG
 Following copyright notice applies to all of the software and associated files. If the file includes copyright notice, that copyright notice shall prevail only for that file.
 
 1. Permissions
-Permission is granted to any person obtaining a copy of this software and associated files to use and distribute copies of this software unmodified, according to the following restrictions:
+Permission is granted to any person obtaining a copy of this software and associated files to use and distribute copies of this software, according to the following restrictions:
 
-a) The above copyright notice shall be included in all copies of the software. 
+a) The copyright notice shall be included in all copies of the software. 
 b) If the work using this software has a user interface, the interface shall contains a visible option to
     1) display this entire license, and
     2) tell the user how to view a copy of this license.
+c) If this software is being used or distributed with modification, the following restrictions also applies:
+    1) the modification is made available to the distributor of this software upon request with a permission for the distributor to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the modification.
+    2) all modifications received from distributing this software shall be made available to the distributor of this software with a permission for the distributor to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the modification.
 	
 2. Disclaimer of Warranty
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE. 

@@ -195,7 +195,7 @@ class DispatchAsyncDescriptor:
 
 class EventDispatcherMetaMixin:
     """
-    metaclass to make .event of EventDispatcher works with super()
+    metaclass to make `.event` and `.dispatch`es of EventDispatcher work with super()
     """
     def __init__(self, name, bases, attrs):
         super().__init__(name, bases, attrs)

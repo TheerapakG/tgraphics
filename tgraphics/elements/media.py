@@ -25,6 +25,17 @@ class Player(ElementABC):
         self._player.loop = loop
 
     @property
+    def volume(self):
+        return self._player.volume
+
+    @volume.setter
+    def volume(self, v):
+        """
+        0.0 (silence) to 1.0 (normal)
+        """
+        self._player.volume = v
+
+    @property
     def size(self):
         if self._player and self._player.source:
             return self._player.source.size

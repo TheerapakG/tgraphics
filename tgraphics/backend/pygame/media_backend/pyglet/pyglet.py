@@ -48,6 +48,14 @@ class Player:
         self._player.loop = loop    
 
     @property
+    def volume(self):
+        return self._player.volume
+
+    @volume.setter
+    def volume(self, v):
+        self._player.volume = v
+
+    @property
     def source(self):
         return Source(self._player.source)
 

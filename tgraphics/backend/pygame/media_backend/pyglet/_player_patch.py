@@ -89,7 +89,9 @@ class PatchedPlayer(pyglet.media.Player):
         if self._prev_time:
             time_loss = (c_time - self._prev_time)
             if time_loss > 0.1:
-                super().pause()
+                playing = self._playing
+                if playing:
+                    super().pause()
                 if time_loss > 0.5:
                     print('compensating audio loss by seeking back', time_loss, 'seconds')
                     print('(seeking to', max(0, super().time-time_loss), 'seconds)')
@@ -98,7 +100,8 @@ class PatchedPlayer(pyglet.media.Player):
                     print('fixing audio after longer than expected time jump of', time_loss, 'seconds')
                     print('(seeking to', super().time, 'seconds)')
                     super().seek(super().time)
-                super().play()
+                if playing:
+                    super().play()
         self._prev_time = c_time
 
     def play(self, window):

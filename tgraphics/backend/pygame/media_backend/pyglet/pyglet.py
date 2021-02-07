@@ -74,7 +74,7 @@ class Source:
 
     @staticmethod
     def from_file(filename, preload=False):
-        media = pyglet.media.load(filename, streaming=not preload)
+        media = pyglet.media.load(filename, streaming=not preload, decoder=pyglet.media.codecs.ffmpeg.FFmpegDecoder())
         return Source(media)
 
     @property

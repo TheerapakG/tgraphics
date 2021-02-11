@@ -436,7 +436,7 @@ class Grid(ElementABC):
 
     def _bound(self):
         all_loc = [Rect(pos, c.size) for c, pos in self._sub]
-        return Rect.union(all_loc)
+        return all_loc[0].unionall(all_loc)
 
     @property
     def bound(self):
@@ -461,15 +461,19 @@ class Grid(ElementABC):
     def view(self, new_view):
         self._loc = new_view[0]
         if new_view[1]:
-            self._sz[0] = new_view[1][0] - new_view[0][0]
-            self._sz[1] = new_view[1][1] - new_view[0][1]
+            self._sz = (new_view[1][0] - new_view[0][0], new_view[1][1] - new_view[0][1])
 
     def render(self, location, size=None):
         for c, pos in self._sub:
             _sz = c.size
             x, y = pos
-            if x <= self._loc[0] + self._sz[0] and y <= self._loc[1] + self._sz[1] and x + _sz[0] >= self._loc[0] and y + _sz[1] >= self._loc[1]:
-                c.render((location[0] + x, location[1] + y), None if not size else (size[0] / self._sz[0] * _sz[0], size[1] / self._sz[1] * _sz[1]))
+            if 0 <= x - self._loc[0] and x - self._loc[0] <= self._sz[0] and 0 <= y - self._loc[1] and y - self._loc[1] <= self._sz[1]:
+                if size:
+                    factorx = size[0] / self._sz[0]
+                    factory = size[1] / self._sz[1]
+                    c.render((location[0] + (x - self._loc[0])*factorx, location[1] + (y - self._loc[1])*factory), (_sz[0]*factorx, _sz[1]*factory))
+                else:
+                    c.render((location[0] + (x - self._loc[0]), location[1] + (y - self._loc[1])))
 
 
 class StaticGridError(Exception):

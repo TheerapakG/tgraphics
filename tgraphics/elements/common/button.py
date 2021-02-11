@@ -23,7 +23,7 @@ class _ButtonRenderHelper(ElementABC):
         self.fg = fg
         self.bg = bg
         self._sz = size
-        self._static = self.fg.static and (not self.bg or self.bg.static)
+        self._static = (not self.fg or self.fg.static) and (not self.bg or self.bg.static)
 
     @property
     def size(self):
@@ -33,8 +33,9 @@ class _ButtonRenderHelper(ElementABC):
         size = size if size else self.size 
         if self.bg:
             self.bg.render(location, None if self.bg.size==size else size)
-        _fg_size = self.fg.size
-        self.fg.render((location[0]+(size[0]-_fg_size[0])/2, location[1]+(size[1]-_fg_size[1])/2))
+        if self.fg:
+            _fg_size = self.fg.size
+            self.fg.render((location[0]+(size[0]-_fg_size[0])/2, location[1]+(size[1]-_fg_size[1])/2))
 
 
 class _ButtonBGDefaultType:

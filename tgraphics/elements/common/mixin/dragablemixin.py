@@ -37,7 +37,7 @@ class DragableMixin(ElementABC):
         res = await super().dispatch_async('on_mouse_drag', x, y, dx, dy, buttons)
         if self._l_pos:
             self._l_pos = (self._l_pos[0] + dx, self._l_pos[1] + dy)
-            _n_pos = self._transform_f(*self._l_pos) if self._transform_f else self._l_pos
+            _n_pos = self._transform_f(*self._l_pos, dx, dy) if self._transform_f else self._l_pos
             self.pos = _n_pos
             await self.dispatch_async('on_this_dragged', this=self)
             return True

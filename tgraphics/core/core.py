@@ -130,3 +130,6 @@ class Window:
 
 def run():
     _current_backend().run()
+
+def stop():
+    _current_backend().stop()

@@ -1,9 +1,12 @@
+import asyncio
 from abc import ABCMeta
 from collections import defaultdict
 from functools import partial
+import inspect
 import traceback
 from types import MethodType
 
+from ..core.backend_loader import _current_backend
 from ..utils.typehint import *
 from ..utils.asynchelper import *
 
@@ -29,18 +32,41 @@ def event_handler(func, *, name=None):
         return partial(event_handler, name=func)
     return EventHandler(name if name else func.__name__, func)
 
-def _invoke(f, *args, _event, **kwargs):
+def _warn_async_from_sync(f, event, obj):
+    # TODO: debug mode
+    print('[WARN] dispatching async event function', f, 'from sync dispatch')
+    print('[WARN] consider using dispatch_async for event', event, 'on object', obj)
+    stack = inspect.stack()
+    frame = next((f for f in stack if f.filename != __file__), None)
     try:
-        return f(*args, **kwargs)
+        print('[WARN]   File "{0.filename}", line {0.lineno}, in {0.function}'.format(frame))
+        print('[WARN]     {0}'.format(frame.code_context[frame.index].strip()))
+    finally:
+        if frame:
+            del frame
+        del stack
+
+def _invoke(f, *args, _event, _obj, **kwargs):
+    try:
+        res = f(*args, **kwargs)
     except Exception as e:
         print('Exception while dispatching event listener', _event)
         print(traceback.format_exc())
         return False
 
-async def _invoke_async(f, *args, _event, **kwargs):
+    if inspect.isawaitable(res):
+        _current_backend().cleanup_coro_done(asyncio.create_task(res))
+        _warn_async_from_sync(f, _event, _obj)
+        # Can't really know res truthy, assume dispatch accepted
+        return True
+    else:
+        return res
+
+async def _invoke_async(f, *args, _event, _obj, **kwargs):
     try:
         return await invoke(f, *args, **kwargs)
     except Exception as e:
+        # TODO: debug mode
         print('Exception while dispatching event listener', _event)
         print(traceback.format_exc())
         return False
@@ -72,12 +98,19 @@ class EventLookupHelper:
         found = False
         res = False
         for cls in anchor.__mro__:
-            if self._listeners[cls][event]:
-                inv_l = [_invoke(f, *args, _event=event, **kwargs) for f in self._listeners[cls][event].copy()]
+            listeners = self._listeners[cls].get(event, None)
+            if listeners:
+                inv_l = [_invoke(f, *args, _event=event, _obj=self._obj, **kwargs) for f in listeners.copy()]
                 res = any(inv_l) or res
-            if self._handlers[cls][event]:
+            handler = self._handlers[cls].get(event, None)
+            if handler:
                 found = True
-                res = self._handlers[cls][event](*args, **kwargs)
+                res = handler(*args, **kwargs)
+                if inspect.isawaitable(res):
+                    _current_backend().cleanup_coro_done(asyncio.create_task(res))
+                    _warn_async_from_sync(handler, event, self._obj)
+                    # Can't really know res truthy, assume dispatch accepted
+                    res = True
             if found:
                 return res
 
@@ -90,12 +123,14 @@ class EventLookupHelper:
         found = False
         res = False
         for cls in anchor.__mro__:
-            if self._listeners[cls][event]:
-                inv_l = [await _invoke_async(f, *args, _event=event, **kwargs) for f in self._listeners[cls][event].copy()]
+            listeners = self._listeners[cls].get(event, None)
+            if listeners:
+                inv_l = [await _invoke_async(f, *args, _event=event, _obj=self._obj, **kwargs) for f in listeners.copy()]
                 res = any(inv_l) or res
-            if self._handlers[cls][event]:
+            handler = self._handlers[cls].get(event, None)
+            if handler:
                 found = True
-                res = await invoke(self._handlers[cls][event], *args, **kwargs)
+                res = await invoke(handler, *args, **kwargs)
             if found:
                 return res
 

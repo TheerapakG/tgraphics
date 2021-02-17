@@ -88,7 +88,7 @@ class PatchedPlayer(pyglet.media.Player):
         c_time = pyglet.clock.get_default().cumulative_time
         if self._prev_time:
             time_loss = (c_time - self._prev_time)
-            if time_loss > 0.1:
+            if time_loss > 0.2:
                 playing = self._playing
                 if playing:
                     super().pause()

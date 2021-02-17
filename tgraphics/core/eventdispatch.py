@@ -5,6 +5,7 @@ from functools import partial
 import inspect
 import traceback
 from types import MethodType
+import warnings
 
 from ..core.backend_loader import _current_backend
 from ..utils.typehint import *
@@ -32,15 +33,28 @@ def event_handler(func, *, name=None):
         return partial(event_handler, name=func)
     return EventHandler(name if name else func.__name__, func)
 
+class AsyncFromSyncWarning(UserWarning):
+    pass
+
 def _warn_async_from_sync(f, event, obj):
-    # TODO: debug mode
-    print('[WARN] dispatching async event function', f, 'from sync dispatch')
-    print('[WARN] consider using dispatch_async for event', event, 'on object', obj)
     stack = inspect.stack()
     frame = next((f for f in stack if f.filename != __file__), None)
     try:
-        print('[WARN]   File "{0.filename}", line {0.lineno}, in {0.function}'.format(frame))
-        print('[WARN]     {0}'.format(frame.code_context[frame.index].strip()))
+        with warnings.catch_warnings():
+            warnings.simplefilter('always')
+            warnings.warn_explicit(
+                AsyncFromSyncWarning(
+                    '\n'.join((
+                        'dispatching async event function from sync dispatch, consider using dispatch_async instead of dispatch',
+                        'function: {}'.format(f),
+                        'event: {}'.format(event),
+                        'object: {}'.format(obj),
+                    ))
+                ),
+                None,
+                filename=frame.filename if frame else None, 
+                lineno=frame.lineno if frame else None
+            )
     finally:
         if frame:
             del frame

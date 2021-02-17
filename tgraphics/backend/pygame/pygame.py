@@ -33,6 +33,8 @@ class BlendMode(IntEnum):
     BLENDMODE_INVALID = 0x7FFFFFFF
 
 _WindowsMap = dict() # type: Dict[Any, Window]
+if sys.platform == 'win32':
+    _HWNDMap = dict() # type: Dict[int, Window]
 _Windows = set() # type: Set[Window]
 
 class Renderer:
@@ -169,6 +171,10 @@ class Window(EventDispatcher):
         _window = _PygameClsSdlWindow(title, size, fullscreen=full_screen, resizable=resizable)
         window = Window(_window)
         _WindowsMap[_window] = window
+        if sys.platform == 'win32':
+            info = sdl_getwindowwminfo(window._ctype)
+            if info.subsystem == SDL_SYSWM_WINDOWS:
+                _HWNDMap[int(info.info.win.window)] = window
         _Windows.add(window)
         
         window._last_frame_time = None
@@ -185,6 +191,51 @@ class Window(EventDispatcher):
             window._draw_time = datetime.timedelta(seconds=window._current_frame_time - window._current_start_time)
             if window._last_frame_time:
                 window._frame_delta = datetime.timedelta(seconds=window._current_frame_time - window._last_frame_time)
+
+        if sys.platform == 'win32':
+            import ctypes
+            from ctypes.wintypes import DWORD, HWND, UINT
+            user32 = ctypes.windll.user32
+            TIMERPROC = ctypes.WINFUNCTYPE(None, HWND, UINT, ctypes.POINTER(UINT), DWORD)
+            window._blocking = False
+
+            def timed_func(hwnd, msg, timer, t):
+                if window._blocking and window in _Windows:
+                    window.dispatch('on_draw')
+                    target_period = (datetime.timedelta(seconds=1)/window._target_fps)
+                    compensated_period = max(0, int((target_period-window._frame_delta).total_seconds() * 1000))
+                    user32.SetTimer(0, window._timer, ctypes.c_uint(compensated_period), window._timed_func)
+                else:
+                    user32.SetTimer(0, window._timer, 0x7fffffff, window._timed_func)
+
+            window._timed_func = TIMERPROC(timed_func)
+            window._timer = user32.SetTimer(0, 0, 0x7fffffff, window._timed_func)
+
+            on_syswm = window.event['on_syswm']
+            @on_syswm.add_listener
+            def on_syswm(_msg):
+                blocking = False
+                unblocking = False
+                msg = int(_msg.msg.win.msg)
+                wparam = int(_msg.msg.win.wParam)
+                lparam = int(_msg.msg.win.lParam)
+
+                if msg == 274: # WM_SYSCOMMAND
+                    if wparam == 61696 and lparam & (1 >> 16) <= 0: # wparam == SC_KEYMENU
+                        return # no menu
+                    if wparam & 0xfff0 in (61456, 61440): # wparam in SC_MOVE, SC_Size
+                        # Before WM_ENTERSIZEMOVE, https://docs.microsoft.com/en-us/windows/win32/winmsg/wm-entersizemove
+                        blocking = True
+                elif msg == 562: # WM_EXITSIZEMOVE
+                    unblocking = True
+
+                if blocking:
+                    window._blocking = True
+                    target_period = (datetime.timedelta(seconds=1)/window._target_fps)
+                    compensated_period = max(0, int((target_period-window._frame_delta).total_seconds() * 1000))
+                    user32.SetTimer(0, window._timer, ctypes.c_uint(compensated_period), window._timed_func)
+                elif unblocking:
+                    window._blocking = False
         
         runner.current_renderer = window._renderer
         if runner.running:
@@ -536,6 +587,7 @@ def init():
     # "fix" pygame overwriting some fonts from the same family
     pygame.sysfont._parse_font_entry_win = _parse_font_entry_win
     pygame.init()
+    sdl_eventstate(pygame.SYSWMEVENT, 1)
 
 class InvalidLoopStateException(Exception):
     pass
@@ -664,6 +716,21 @@ class _Runner(EventDispatcher):
             await window.dispatch_async('on_hit_test')
 
     async def run_events(self):
+        def _immediate_event(userdata, event: ctypes.POINTER(SDL_Event)):
+            if event.contents.type == SDL_SYSWMEVENT:
+                msg = event.contents.syswm.msg.contents
+                if msg.subsystem == SDL_SYSWM_WINDOWS:
+                    hwnd = msg.msg.win.hwnd
+                    window = _HWNDMap[hwnd]
+                    window.dispatch('on_syswm', msg)
+                else:
+                    print('unknown WM')
+            return 1
+
+        event_filt = SDL_EventFilter(_immediate_event)
+
+        sdl_addeventwatch(event_filt, None)
+
         pygame.event.clear()
         _mouse._mouse_from_pygtpl(pygame.mouse.get_pressed(5))
 
@@ -679,7 +746,9 @@ class _Runner(EventDispatcher):
                 expect_time = datetime.timedelta(seconds=current_start_time - current_loop_time) + loop_run_time
                 await asyncio.sleep((target_time-expect_time).total_seconds()/2)
 
-            for event in pygame.event.get():
+            events = pygame.event.get(pump=False)
+            filtered_events = [e for e in events if e.type != pygame.SYSWMEVENT]
+            for event in filtered_events:
                 if not self.running:
                     return
                 try:
@@ -690,9 +759,12 @@ class _Runner(EventDispatcher):
             
             current_loop_time = time.perf_counter()
             loop_run_time = datetime.timedelta(seconds=current_loop_time - current_start_time)
+            pygame.event.pump()
             
             # TODO: if not in "hog cpu" context (another thing to do) then yield to other process
             # until before next frame is needed, then we just await asyncio.sleep(0) at the start of this loop
+
+        sdl_deleventwatch(event_filt, None)
 
     async def run_coros_cleanup(self):
         while self.running:

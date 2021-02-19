@@ -6,8 +6,8 @@ from pathlib import Path
 import pygame
 import sys
 
-from ._sdl2_syswm import *
-from ._sdl2_events import *
+from .syswm import *
+from .events import *
 
 _pygame_dir = Path(pygame.__file__).parent
 

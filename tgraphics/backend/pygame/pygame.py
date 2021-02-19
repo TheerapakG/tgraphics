@@ -11,7 +11,8 @@ import pygame
 
 from . import _mouse
 from .key import Keys
-from ._sdl2 import *
+from ._c_sdl.sdl2 import *
+from ._c_pyg.event import pgevent_new
 from ...core.eventdispatch import EventDispatcher, event_handler
 from ...utils.typehint import *
 
@@ -213,20 +214,17 @@ class Window(EventDispatcher):
 
             on_syswm = window.event['on_syswm']
             @on_syswm.add_listener
-            def on_syswm(_msg):
+            def on_syswm(event):
                 blocking = False
                 unblocking = False
-                msg = int(_msg.msg.win.msg)
-                wparam = int(_msg.msg.win.wParam)
-                lparam = int(_msg.msg.win.lParam)
 
-                if msg == 274: # WM_SYSCOMMAND
-                    if wparam == 61696 and lparam & (1 >> 16) <= 0: # wparam == SC_KEYMENU
+                if event.msg == 274: # WM_SYSCOMMAND
+                    if event.wparam == 61696 and event.lparam & (1 >> 16) <= 0: # wparam == SC_KEYMENU
                         return # no menu
-                    if wparam & 0xfff0 in (61456, 61440): # wparam in SC_MOVE, SC_Size
+                    if event.wparam & 0xfff0 in (61456, 61440): # wparam in SC_MOVE, SC_Size
                         # Before WM_ENTERSIZEMOVE, https://docs.microsoft.com/en-us/windows/win32/winmsg/wm-entersizemove
                         blocking = True
-                elif msg == 562: # WM_EXITSIZEMOVE
+                elif event.msg == 562: # WM_EXITSIZEMOVE
                     unblocking = True
 
                 if blocking:
@@ -718,11 +716,11 @@ class _Runner(EventDispatcher):
     async def run_events(self):
         def _immediate_event(userdata, event: ctypes.POINTER(SDL_Event)):
             if event.contents.type == SDL_SYSWMEVENT:
-                msg = event.contents.syswm.msg.contents
-                if msg.subsystem == SDL_SYSWM_WINDOWS:
-                    hwnd = msg.msg.win.hwnd
+                event = pgevent_new(event)
+                hwnd = getattr(event, 'hwnd', None)
+                if hwnd:
                     window = _HWNDMap[hwnd]
-                    window.dispatch('on_syswm', msg)
+                    window.dispatch('on_syswm', event)
                 else:
                     print('unknown WM')
             return 1
